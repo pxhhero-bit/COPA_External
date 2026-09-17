@@ -1,0 +1,257 @@
+{
+  "rules_metadata": {
+    "version": "2.1",
+    "description": "报价文本业务用语识别规则库：term_pattern 定义各参数的业务用语正则，protocols 节定义通讯协议识别正则及其类别(basic->req_com1/extended->req_com2，供裸协议片段兜底)，配合单位/中文数字表完成取值并映射到标准参数ID；产品型号/系列词由 data/ 数据库CSV兜底。"
+  },
+
+  "delimiters": {
+    "component": ["。", "\n"],
+    "parameter": ["，", "、", ","]
+  },
+
+  "negation_marks": ["不需要", "无需", "不带", "没有", "无", "没"],
+
+  "units": {
+    "weight": {
+      "吨": 1000, "t": 1000, "T": 1000,
+      "kg": 1, "KG": 1, "Kg": 1, "kG": 1, "千克": 1, "公斤": 1,
+      "g": 0.001, "G": 0.001, "克": 0.001
+    }
+  },
+
+  "chinese_numerals": {
+    "零": 0, "一": 1, "单": 1, "二": 2, "两": 2, "双": 2,"三": 3, "四": 4, "五": 5,
+    "六": 6, "七": 7, "八": 8, "九": 9, "十": 10
+  },
+
+  "parameters": {
+
+    "W1": {
+      "term_pattern": "最大物料重量|物料重量|最大料重|最大车重|料重|车重",
+      "type": "weight"
+    },
+
+    "W2": {
+      "term_pattern": "设备本身重量|设备皮重|设备重|设备|皮重",
+      "type": "weight"
+    },
+
+    "W_total": {
+      "term_pattern": "总重量|总重|合计重量",
+      "type": "weight",
+      "description": "总重=最大料重+皮重的口径(用户只知总和不知拆分)：Parser 归一为 W1=总重、W2=0 传入 engine；与料重/皮重同时出现视为口径冲突，以显式拆分值为准"
+    },
+
+    "support": {
+      "term_pattern": "支撑点|支点|支腿",
+      "type": "integer",
+      "min": 1
+    },
+
+    "m_brand": {
+      "term_pattern": "传感器.{0,3}用|模块.{0,3}用|传感器|模块",
+      "type": "brand",
+      "values": {
+        "FT": "FT", "Flintec": "FT", "富林泰克": "FT",
+        "AW": "AW", "Ailiwei": "AW", "艾力威": "AW", "COPA A": "AW",
+        "FAB": "FAB", "Flintab": "FAB", "富林泰博": "FAB"
+      }
+    },
+
+    "c_brand": {
+      "term_pattern": "仪表品牌|控制器品牌|仪表.{0,3}用|控制器.{0,3}用|仪表|控制器",
+      "type": "brand",
+      "values": {
+        "FT": "FT", "Flintec": "FT", "富林泰克": "FT",
+        "AW": "AW", "Ailiwei": "AW", "艾力威": "AW", "COPA A": "AW",
+        "FAB": "FAB", "Flintab": "FAB", "富林泰博": "FAB"
+      }
+    },
+
+    "c_family": {
+      "type": "text",
+      "description": "用户点名的仪表系列标识：无业务用语正则，由CSV词表二次识别派生——仪表词条(nickname 3306/family FAB330等)命中 c_brand 时取命中词条本身(3306->'3306'，FAB330->'FAB330')，不放大到 family 大类"
+    },
+
+    "Ex_P": {
+      "term_pattern": "需要防爆|要防爆|防爆",
+      "type": "flag"
+    },
+
+    "required_ex": {
+      "term_pattern": "防爆等级",
+      "type": "text"
+    },
+
+    "material": {
+      "term_pattern": "不锈钢|碳钢|混合|模块材质|材质要求|材质",
+      "type": "text",
+      "values": {
+        "碳钢": "碳钢", "不锈钢": "不锈钢", "混合": "混合"
+      }
+    },
+
+    "台面尺寸": {
+      "term_pattern": "台面尺寸|秤台尺寸|台面大小|台面",
+      "type": "size"
+    },
+
+    "e_input": {
+      "term_pattern": "精度要求|要求精度|分度值|[eE]值",
+      "type": "weight"
+    },
+
+    "r_input": {
+      "term_pattern": "额定容量|最大容量|额定量程|量程|\\d+(?:\\.\\d+)?\\s*(?:吨|[tT]|千克|公斤|[kK][gG])\\s*[\\u4e00-\\u9fff]{0,8}?(?:平台秤|台秤|汽车衡)",
+      "type": "weight"
+    },
+
+    "vibration": {
+      "term_pattern": "高速搅拌|带搅拌|有搅拌|搅拌",
+      "type": "flag"
+    },
+
+    "RPM": {
+      "term_pattern": "转速|[Rr][Pp][Mm]|转",
+      "type": "integer",
+      "min": 0
+    },
+
+    "安装形式": {
+      "term_pattern": "安装形式|一体式|分体式",
+      "type": "option",
+      "options": ["一体", "分体"]
+    },
+
+    "分体仪表支架": {
+      "term_pattern": "壁挂支架|立杆支架|壁挂安装|立杆安装|挂墙|立柱",
+      "type": "option",
+      "options": ["壁挂支架", "立杆支架", "壁挂", "立杆"]
+    },
+
+    "install": {
+      "term_pattern": "面板式安装|导轨式安装|面板式|导轨式|防尘式|隔爆式|隔爆",
+      "type": "option",
+      "options": ["面板式", "导轨式", "防尘式", "隔爆"]
+    },
+
+    "power": {
+      "term_pattern": "供电方式|供电|电源",
+      "type": "option",
+      "options": ["AC220V", "DC24V"]
+    },
+
+    "req_com1": {
+      "term_pattern": "串口通讯|串口通信|串口",
+      "type": "com_list"
+    },
+
+    "req_com2": {
+      "term_pattern": "扩展通讯|扩展通信|通讯要求|通信要求|通讯|通信",
+      "type": "com_list"
+    },
+
+    "special_req": {
+      "term_pattern": "通道",
+      "type": "integer",
+      "min": 1
+    },
+
+    "special_req2": {
+      "term_pattern": "电池供电|带电池|带锂电",
+      "type": "flag"
+    }
+  },
+
+  "protocols": [  
+    {
+      "canonical": "RS232",
+      "pattern": "(?i:rs[-\\s]?232)|(?<![A-Za-z0-9])232(?![A-Za-z0-9])",
+      "category": "basic"
+    },
+    {
+      "canonical": "RS485",
+      "pattern": "(?i:rs[-\\s]?485)|(?<![A-Za-z0-9])485(?![A-Za-z0-9])",
+      "category": "basic"
+    },
+    {
+      "canonical": "Modbus",
+      "pattern": "(?i:odbus)|RTU",
+      "category": "basic"
+    },
+    {
+      "canonical": "TCP",
+      "pattern": "(?i:tcp)",
+      "category": "extended"
+    },
+    {
+      "canonical": "ANALOG",
+      "pattern": "(?i:analog)|模拟量通[讯信]|4-20[Mm][Aa]",
+      "category": "extended"
+    },
+    {
+      "canonical": "ANALOG5V",
+      "pattern": "(?i:0\\s*[-~－—～]\\s*5V)|(?i:5V模拟量)",
+      "category": "extended"
+    },
+    {
+      "canonical": "ANALOG10V",
+      "pattern": "(?i:0\\s*[-~－—～]\\s*10V)|(?i:10V模拟量)",
+      "category": "extended"
+    },
+    {
+      "canonical": "DP",
+      "pattern": "(?i:rofibus)|(?<![A-Za-z])(?i:dp)(?![A-Za-z])",
+      "category": "extended"
+    },
+    {
+      "canonical": "PROFINET",
+      "pattern": "(?i:rofinet)|(?<![A-Za-z])PN(?![A-Za-z])",
+      "category": "extended"
+    },
+    {
+      "canonical": "IP",
+      "pattern": "(?i:thernet)|(?<![A-Za-z])(?i:ip)(?![A-Za-z0-9])|以太网",
+      "category": "extended"
+    },
+    {
+      "canonical": "CAT",
+      "pattern": "(?<![A-Za-z])(?i:cat)(?![A-Za-z])",
+      "category": "extended"
+    },
+    {
+      "canonical": "BT",
+      "pattern": "(?i:bluetooth)|蓝牙",
+      "category": "extended"
+    },
+    {
+      "canonical": "CCLINK",
+      "pattern": "(?i:cclink)|CCLINK|CC-Link",
+      "category": "extended"
+    },
+    {
+      "canonical": "IO",
+      "pattern": "(?i:DIDO)|(?i:DIDO)|(?i:io)|(?<![A-Za-z])IO(?![A-Za-z])|IO模块|IO板",
+      "category": "extended"
+    },
+    {
+      "canonical": "WIFI",
+      "pattern": "(?i:wifi)|(?i:wi-fi)|(?i:wireless)|无线|WLAN",
+      "category": "extended"
+    }
+  ],
+
+  "com1_code": {
+    "single_serial": "basic_1",
+    "dual_serial": "basic_2",
+    "modbus_x1": "RTU_1",
+    "modbus_x2": "RTU_2",
+    "modbus_count_pattern": "(\\d+)\\s*[路*×xX]\\s*(?:(?i:modbus)|RTU)",
+    "coverage": {
+      "basic_1": ["basic_1"],
+      "basic_2": ["basic_2", "basic_1"],
+      "RTU_1": ["RTU_1", "basic_1"],
+      "RTU_2": ["RTU_2", "RTU_1", "basic_2", "basic_1"]
+    }
+  }
+}

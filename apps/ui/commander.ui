@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1250</width>
+    <height>850</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>COPA  选型报价辅助系统</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QMdiSubWindow {
+    background-color: #F3F3F3;
+    border: 1px solid #444444;
+    color: rgb(0, 0, 0);
+}
+
+/* 标题栏区域（通过内部布局控制） */
+QMdiSubWindow &gt; QWidget {
+    background-color: rgb(255, 255, 255);
+    color: rgb(0, 0, 0);
+}
+QMainWindow {background-color: rgb(117, 117, 117)}</string>
+  </property>
+  <widget class="QWidget" name="centralwidget"/>
+  <widget class="QToolBar" name="toolBarLeft">
+   <property name="minimumSize">
+    <size>
+     <width>0</width>
+     <height>0</height>
+    </size>
+   </property>
+   <property name="windowTitle">
+    <string>工具栏</string>
+   </property>
+   <property name="movable">
+    <bool>false</bool>
+   </property>
+   <property name="iconSize">
+    <size>
+     <width>32</width>
+     <height>32</height>
+    </size>
+   </property>
+   <property name="toolButtonStyle">
+    <enum>Qt::ToolButtonStyle::ToolButtonTextUnderIcon</enum>
+   </property>
+   <property name="floatable">
+    <bool>false</bool>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>LeftToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="actionToolA"/>
+   <addaction name="actionToolB"/>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1250</width>
+     <height>33</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">/* 菜单栏背景 */
+QMenuBar {
+    background-color: rgb(234, 234, 234);
+    color: rgb(0, 0, 0);
+}
+
+/* 菜单栏项：鼠标悬停/选中时的样式 */
+QMenuBar::item:selected {
+    background-color: rgb(222, 222, 222);  /* 选中背景色 */
+    color: rgb(0, 0, 0);             /* 选中文字色 */
+    border-radius: 4px;
+}
+
+/* 菜单栏项：按下时的样式 */
+QMenuBar::item:pressed {
+    background-color: rgb(222, 222, 222);
+    color: rgb(0, 0, 0);
+}
+
+/* 下拉菜单整体背景 */
+QMenu {
+    background-color: rgb(255, 255, 255);
+    color: rgb(0, 0, 0);
+    border: 1px solid #444444;
+}
+
+/* 下拉菜单项：悬停/选中 */
+QMenu::item:selected {
+    background-color: rgb(222, 222, 222);
+    color: rgb(0, 0, 0);
+    border-radius: 3px;
+}
+
+/* 下拉菜单项：禁用状态 */
+QMenu::item:disabled {
+    color: #888888;
+}
+
+/* 分隔线颜色 */
+QMenu::separator {
+    background-color: #444444;
+    height: 1px;
+    margin: 4px 8px;
+}</string>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>文件</string>
+    </property>
+    <addaction name="actionNew"/>
+    <addaction name="actionNSD"/>
+    <addaction name="actionOpen"/>
+    <addaction name="separator"/>
+    <addaction name="actionSave"/>
+    <addaction name="separator"/>
+    <addaction name="actionCloseCurrent"/>
+    <addaction name="actionCloseAll"/>
+   </widget>
+   <widget class="QMenu" name="menuEdit">
+    <property name="title">
+     <string>编辑</string>
+    </property>
+    <addaction name="actionCut"/>
+    <addaction name="actionCopy"/>
+    <addaction name="actionPaste"/>
+    <addaction name="actionDel"/>
+    <addaction name="actionSelectAll"/>
+   </widget>
+   <widget class="QMenu" name="menuConfig">
+    <property name="title">
+     <string>设置</string>
+    </property>
+    <addaction name="actionDefaultInput"/>
+    <addaction name="separator"/>
+    <addaction name="actionManual"/>
+    <addaction name="separator"/>
+    <addaction name="actionInfo"/>
+    <addaction name="actionFeedback"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuEdit"/>
+   <addaction name="menuConfig"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar">
+   <property name="styleSheet">
+    <string notr="true">background-color: rgb(226, 226, 226)</string>
+   </property>
+  </widget>
+  <action name="actionNew">
+   <property name="icon">
+    <iconset theme="document-new"/>
+   </property>
+   <property name="text">
+    <string>新建报价选型</string>
+   </property>
+   <property name="toolTip">
+    <string>新建项目报价</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+N</string>
+   </property>
+   <property name="visible">
+    <bool>true</bool>
+   </property>
+   <property name="iconVisibleInMenu">
+    <bool>true</bool>
+   </property>
+   <property name="priority">
+    <enum>QAction::Priority::HighPriority</enum>
+   </property>
+  </action>
+  <action name="actionOpen">
+   <property name="icon">
+    <iconset theme="document-open"/>
+   </property>
+   <property name="text">
+    <string>打开项目快照</string>
+   </property>
+  </action>
+  <action name="actionSave">
+   <property name="icon">
+    <iconset theme="document-save"/>
+   </property>
+   <property name="text">
+    <string>保存项目快照</string>
+   </property>
+   <property name="toolTip">
+    <string>保存项目快照</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+  </action>
+  <action name="actionCloseCurrent">
+   <property name="icon">
+    <iconset theme="application-exit"/>
+   </property>
+   <property name="text">
+    <string>关闭当前...</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+F4</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::TextHeuristicRole</enum>
+   </property>
+  </action>
+  <action name="actionCloseAll">
+   <property name="icon">
+    <iconset theme="application-exit"/>
+   </property>
+   <property name="text">
+    <string>关闭所有...</string>
+   </property>
+  </action>
+  <action name="actionCut">
+   <property name="icon">
+    <iconset theme="edit-cut"/>
+   </property>
+   <property name="text">
+    <string>剪切</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+X</string>
+   </property>
+  </action>
+  <action name="actionCopy">
+   <property name="icon">
+    <iconset theme="edit-copy"/>
+   </property>
+   <property name="text">
+    <string>复制</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+C</string>
+   </property>
+  </action>
+  <action name="actionPaste">
+   <property name="icon">
+    <iconset theme="edit-paste"/>
+   </property>
+   <property name="text">
+    <string>粘贴</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+V</string>
+   </property>
+  </action>
+  <action name="actionDel">
+   <property name="icon">
+    <iconset theme="edit-delete"/>
+   </property>
+   <property name="text">
+    <string>删除</string>
+   </property>
+   <property name="shortcut">
+    <string>Del</string>
+   </property>
+  </action>
+  <action name="actionSelectAll">
+   <property name="text">
+    <string>全选</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+A</string>
+   </property>
+  </action>
+  <action name="actionManual">
+   <property name="icon">
+    <iconset theme="help-browser"/>
+   </property>
+   <property name="text">
+    <string>使用说明</string>
+   </property>
+  </action>
+  <action name="actionInfo">
+   <property name="icon">
+    <iconset theme="help-about"/>
+   </property>
+   <property name="text">
+    <string>关于COPA</string>
+   </property>
+  </action>
+  <action name="actionFeedback">
+   <property name="icon">
+    <iconset theme="mail-forward"/>
+   </property>
+   <property name="text">
+    <string>反馈与优化</string>
+   </property>
+  </action>
+  <action name="actionDefaultInput">
+   <property name="icon">
+    <iconset theme="mail-message-new"/>
+   </property>
+   <property name="text">
+    <string>默认输入方式...</string>
+   </property>
+   <property name="toolTip">
+    <string>设置需求录入窗口默认显示的输入页签</string>
+   </property>
+  </action>
+  <action name="actionToolA">
+   <property name="icon">
+    <iconset theme="accessories-calculator"/>
+   </property>
+   <property name="text">
+    <string>选型报价</string>
+   </property>
+   <property name="toolTip">
+    <string>新建报价项目（Desk）</string>
+   </property>
+  </action>
+  <action name="actionToolB">
+   <property name="icon">
+    <iconset theme="document-print"/>
+   </property>
+   <property name="text">
+    <string>技术方案</string>
+   </property>
+   <property name="toolTip">
+    <string>sDocBuilder 技术方案编排</string>
+   </property>
+  </action>
+  <action name="actionNSD">
+   <property name="icon">
+    <iconset theme="document-new"/>
+   </property>
+   <property name="text">
+    <string>新建技术方案</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+O</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

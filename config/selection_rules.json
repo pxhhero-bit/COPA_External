@@ -1,0 +1,307 @@
+{
+  "rules_metadata": {
+     "version": "1.4",
+     "description": "称重系统选型决策规则库"
+  },
+
+  "normalization": {
+  "brand": {
+    "FAB": ["FAB", "Flintab", "富林泰博"],
+    "FT": ["FT", "Flintec", "富林泰克"],
+    "AW": ["AW", "Ailiwei", "艾力威", "COPA A"]
+    }
+  },
+
+  "database_validation": {
+    "enabled": true,
+
+    "module_database": {
+      "check_duplicates": true,
+      "duplicate_key": [
+        "module模块型号",
+        "mtl模块材质",
+        "sag拉杆",
+        "模块孔距",
+        "适用传感器",
+        "过渡板",
+        "EX_level",
+        "品牌"
+      ]
+    },
+
+    "sensor_database": {
+      "check_duplicates": true,
+      "duplicate_key": [
+        "family型号",
+        "capacity容量",
+        "Mtl材质",
+        "安装方式",
+        "Y值",
+        "AC准确度等级",
+        "IP防护等级",
+        "EX_level",
+        "安装孔距",
+        "Seal密封方式",
+        "线制"
+      ]
+    },
+
+    "jbox_database": {
+      "check_duplicates": true,
+      "duplicate_key": [
+        "model型号",
+        "EX_level",
+        "出线数",
+        "线制",
+        "信号模式",
+        "mtl材质",
+        "品牌"
+      ]
+    },
+
+    "controller_database": {
+      "check_duplicates": false,
+      "duplicate_key": [
+        "family族",
+        "详细型号",
+        "防爆等级",
+        "通讯方式",
+        "多通道",
+        "供电方式",
+        "品牌"
+      ]
+    }
+  },
+
+
+ "brands": {
+    "available_brands": [
+      "FT",
+      "AW",
+      "FAB"
+    ],
+    "sensor_db": {
+      "FT": "富林泰克传感器.csv",
+      "AW": "COPA A传感器.csv"
+    },
+    "module_db": "称重模块通表.csv",
+    "jbox_db": "Jbox通表 (FT+AW).csv",
+    "controller_db": {
+      "FT": "flintec仪表.csv",
+      "AW": "alwe仪表.csv",
+      "FAB": "flintab仪表.csv"
+    }
+  },
+
+
+  "item_types": {
+      "称重模块": "module",
+      "台秤": "bench",
+      "平台秤": "platform",
+      "汽车衡": "truck_A",
+      "数字式汽车衡": "truck_D"
+    },
+
+ "sensor_calculation": {
+    "default_SF": 1.5,
+    "formula_display": "T_capacity = (W1 + W2) * SF / N",
+    "reasoning": "单只传感器理论容量=(最大物料重量+设备皮重)*安全系数/支点数，其中安全系数默认为1.5。"
+  },
+
+ "sensor_logic": {
+    "SF_adjustment": {
+      "low_ratio_threshold": 0.3,
+      "default_SF": 1.5,
+      "optimized_SF": 1.4,
+      "reasoning": "物料重量/设备皮重占比低于30%，下调最优安全系数至1.4以优化称量精度。"
+    }
+  },
+
+ "SF_verification": {
+    "sf_zones": [
+      {"min": 1.3, "max": 2.0, "status": "Normal", "color": "Green", "desc": "常规范围(1.3<=SF<2.0)"},
+      {"min": 2.0, "max": 2.3, "status": "Reminder", "color": "Yellow", "desc": "安全系数可能偏大(2.0<=SF<2.3)"},
+      {"min": 2.3, "max": 2.5, "status": "Warning", "color": "Orange", "desc": "安全系数非常大(2.3<=SF<2.5)"},
+      {"min": 2.5, "max": 99.0, "status": "Danger", "color": "Red", "desc": "安全系数过大(2.5或以上)，请人工复核修改"}
+    ]
+  },
+
+  "sag_logic": {
+    "vibration_filter": {
+      "high_speed_threshold": 150,
+      "inclusive": true,
+      "recommended_addons": "sag拉杆",
+      "reasoning": "检测到高速搅拌需求（>=150 rpm），建议选配水平拉杆。"
+    }
+
+  },
+
+  "jbox_selection": {
+  "module": {
+    "FT": {
+      "explosion": "KEEX-4",
+      "normal": "KE-4",
+      "digital": "AWJ-005-D",
+      "digital_explosion": "AWJX-005-D"
+    },
+    "AW": {
+      "explosion": "AWJX-005",
+      "normal": "AWJ-005",
+      "digital": "AWJ-005-D",
+      "digital_explosion": "AWJX-005-D"
+    }
+  },
+  "platform": {
+    "FT": {
+      "explosion": "KEEX-4",
+      "normal": "KE-4",
+      "digital": "AWJ-005-D",
+      "digital_explosion": "AWJX-005-D"
+    },
+    "AW": {
+      "explosion": "AWJX-005",
+      "normal": "AWJ-005",
+      "digital": "AWJ-005-D",
+      "digital_explosion": "AWJX-005-D"
+    }
+  },
+  "truck_A": {
+    "FT": {
+      "normal": "KAF-10"
+    },
+    "AW": {
+      "normal": "AWJ-011"
+    }
+  },
+  "truck_D": {
+    "FT": {
+      "normal": "KAFD-10"
+    },
+    "AW": {
+      "normal": "AWJD-011"
+    }
+  }
+},
+"controller_selection": {
+  "family_mapping": {
+    "module": ["FT-210","FAB330","FAB331"],
+    "bench": ["FT-230","FT-210","AW-220 T1","AW-220 X1","AW-220 T2"],
+    "platform": ["FT-210", "FAB330", "FAB331","AW-220 T1","AW-220 X1","AW-220 T2"],
+    "truck_A": ["FT-220A", "AW-220 H1"],
+    "truck_D": ["FT-220D", "AW-220 H1"]
+  },
+  "digital_protocols": ["RS485", "CAN"],
+
+   "com1_rules": {
+    "basic_1": {
+      "name": "RS232_OR_RS485",
+      "RS232": true,
+      "RS485": true,
+      "mode": "OR",
+      "Modbus": false
+    },
+    "basic_2": {
+      "name": "RS232_AND_RS485",
+      "RS232": true,
+      "RS485": true,
+      "mode": "AND",
+      "Modbus": false
+    },
+    "RTU_1": {
+      "name": "RS232_OR_RS485_MODBUS",
+      "RS232": true,
+      "RS485": true,
+      "mode": "OR",
+      "Modbus": true
+    },
+    "RTU_2": {
+      "name": "RS232_AND_RS485_MODBUS",
+      "RS232": true,
+      "RS485": true,
+      "mode": "AND",
+      "Modbus": true
+    }
+  },
+
+   "ex_mapping": {
+   "0": 0,
+   "二区IIBT4": 1,
+   "二区IICT5": 2,
+   "二区IICT6": 3,
+   "IIBT4": 4,
+   "IICT4": 5,
+   "IIBT5": 6,
+   "IICT5": 7,
+   "IIBT6": 8,
+   "IICT6": 9
+  }
+},
+
+"metrology_rules": {
+  "standard_e_mapping":[
+  {"min": 0, "max": 3, "e": {"value": 1, "exp": -3}},
+  {"min": 3, "max": 6, "e": {"value": 2, "exp": -3}},
+  {"min": 6, "max": 15, "e": {"value": 5, "exp": -3}},
+  {"min": 15, "max": 30, "e": {"value": 1, "exp": -2}},
+  {"min": 30, "max": 60, "e": {"value": 2, "exp": -2}},
+  {"min": 60, "max": 150, "e": {"value": 5, "exp": -2}},
+  {"min": 150, "max": 300, "e": {"value": 1, "exp": -1}},
+  {"min": 300, "max": 600, "e": {"value": 2, "exp": -1}},
+  {"min": 600, "max": 1500, "e": {"value": 5, "exp": -1}},
+  {"min": 1500, "max": 3000, "e": {"value": 1, "exp": 0}},
+  {"min": 3000, "max": 6000, "e": {"value": 2, "exp": 0}},
+  {"min": 6000, "max": 15000, "e": {"value": 5, "exp": 0}},
+  {"min": 15000, "max": 30000, "e": {"value": 1, "exp": 1}},
+  {"min": 30000, "max": 60000, "e": {"value": 2, "exp": 1}},
+  {"min": 60000, "max": 150000, "e": {"value": 5, "exp": 1}},
+  {"min": 150000, "max": 300000, "e": {"value": 1, "exp": 2}}
+],
+
+  "P_mapping": [
+    {"min": 0, "max": 500, "P": 0.12},
+    {"min": 500, "max": 3000, "P": 0.07},
+    {"min": 3000, "max": 30000, "P": 0.05},
+    {"min": 30000, "max": 50000, "P": 0.02},
+    {"min": 50000, "max": 999999999, "P": 0.01}
+  ],
+
+  "grid_mapping": [
+    {"min": 0, "max": 50, "G": 5},
+    {"min": 50, "max": 300, "G": 10},
+    {"min": 300, "max": 3000, "G": 100},
+    {"min": 3000, "max": 5000, "G": 500},
+    {"min": 5000, "max": 50000, "G": 1000},
+    {"min": 50000, "max": 999999999, "G": 5000}
+  ],
+
+  "e_set": {
+    "base": [1, 2, 5],
+    "description": "分度值必须属于1/2/5 × 10^k 体系"
+  },
+
+  "n_limits": {
+    "min": 1200,
+    "max": 6000,
+    "preferred_max": 3000
+  },
+
+  "rounding_rules": {
+    "R_low": "floor_to_10",
+    "R_high": "ceil_to_10"
+  },
+
+  "rated_range_rule": {
+    "must_ge_W1": true,
+    "upper_limit_ratio": 1.5
+  },
+  "Y_vaildation":{
+      "condition": {
+        "ratio_W1_W2_threshold": 1.0
+      },
+      "Y_formulas": {
+        "Y_threshold": "(W1 + W2) * SF / sqrt(N) * 3000 / Rated_Range",
+        "reasoning_description": "当需要检定且物料占比小(W1/W2<1)时，必须满足传感器Y值 >= Y_threshold"
+      }
+  }
+}
+}

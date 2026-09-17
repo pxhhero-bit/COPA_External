@@ -1,0 +1,1099 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Guicard</class>
+ <widget class="QWidget" name="Guicard">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>587</width>
+    <height>400</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>575</width>
+    <height>400</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>新建条目</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">#Guicard{
+	border:1px solid black;
+}</string>
+  </property>
+  <widget class="QLabel" name="label_ID">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>150</y>
+     <width>71</width>
+     <height>61</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>28</pointsize>
+    </font>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">color:rgb(120, 120, 120)</string>
+   </property>
+   <property name="text">
+    <string>ID</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignmentFlag::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QSpinBox" name="spinBox">
+   <property name="geometry">
+    <rect>
+     <x>11</x>
+     <y>241</y>
+     <width>71</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>12</pointsize>
+    </font>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_unit">
+   <property name="geometry">
+    <rect>
+     <x>80</x>
+     <y>240</y>
+     <width>31</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>12</pointsize>
+    </font>
+   </property>
+   <property name="text">
+    <string>套</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignmentFlag::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>110</x>
+     <y>10</y>
+     <width>61</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>条目类型：</string>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="comboBox">
+   <property name="geometry">
+    <rect>
+     <x>170</x>
+     <y>10</y>
+     <width>121</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="toolTip">
+    <string>鼠标悬停并滚动滚轮可快速切换。打字可补全。</string>
+   </property>
+   <property name="toolTipDuration">
+    <number>5000</number>
+   </property>
+   <property name="editable">
+    <bool>true</bool>
+   </property>
+   <property name="placeholderText">
+    <string>请选择条目类型</string>
+   </property>
+   <item>
+    <property name="text">
+     <string>称重模块</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>平台秤</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>台秤</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>汽车衡</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>数字式汽车衡</string>
+    </property>
+   </item>
+  </widget>
+  <widget class="QWidget" name="checkRowWidget">
+   <property name="geometry">
+    <rect>
+     <x>110</x>
+     <y>34</y>
+     <width>465</width>
+     <height>26</height>
+    </rect>
+   </property>
+   <layout class="QHBoxLayout" name="checkRowLayout">
+    <property name="spacing">
+     <number>6</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QCheckBox" name="checkBox">
+      <property name="text">
+       <string>是否需要检定</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="checkBox_2">
+      <property name="toolTip">
+       <string>注意：汽车衡的高精度为C4等级。</string>
+      </property>
+      <property name="toolTipDuration">
+       <number>5000</number>
+      </property>
+      <property name="text">
+       <string>是否高精度</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="checkBox_3">
+      <property name="toolTip">
+       <string>如勾选，请在下方选择具体的防爆等级。默认为IIBT4。</string>
+      </property>
+      <property name="toolTipDuration">
+       <number>5000</number>
+      </property>
+      <property name="text">
+       <string>是否防爆</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="checkBox_4">
+      <property name="toolTip">
+       <string>未完善,需人工复查</string>
+      </property>
+      <property name="toolTipDuration">
+       <number>5000</number>
+      </property>
+      <property name="text">
+       <string>数字化方案</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QWidget" name="formWidget">
+   <property name="geometry">
+    <rect>
+     <x>110</x>
+     <y>60</y>
+     <width>465</width>
+     <height>328</height>
+    </rect>
+   </property>
+   <layout class="QGridLayout" name="formGrid">
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <property name="horizontalSpacing">
+     <number>8</number>
+    </property>
+    <property name="verticalSpacing">
+     <number>4</number>
+    </property>
+    <item row="0" column="0">
+     <widget class="QLabel" name="label_W1">
+      <property name="text">
+       <string>最大料重（kg）</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="1">
+     <widget class="QComboBox" name="combo_W1">
+      <property name="toolTip">
+       <string>最大物料重量/料重；平台秤、台秤可留空，由额定量程兼任。</string>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+      <property name="placeholderText">
+       <string>如：3000 或 3吨</string>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="2">
+     <widget class="QLabel" name="label_W2">
+      <property name="text">
+       <string>皮重（kg）</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="3">
+     <widget class="QComboBox" name="combo_W2">
+      <property name="toolTip">
+       <string>设备本身重量/皮重；称重模块必填。</string>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+      <property name="placeholderText">
+       <string>如：450</string>
+      </property>
+      <item>
+       <property name="text">
+        <string>20</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>50</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>100</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>200</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>450</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QLabel" name="label_support">
+      <property name="text">
+       <string>支点数</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QComboBox" name="combo_support">
+      <property name="toolTip">
+       <string>支撑点/支点数；称重模块必填。</string>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+      <property name="placeholderText">
+       <string>如：4</string>
+      </property>
+      <item>
+       <property name="text">
+        <string>3</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>4</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>6</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>8</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="1" column="2">
+     <widget class="QLabel" name="label_material">
+      <property name="text">
+       <string>模块材质</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="3">
+     <widget class="QComboBox" name="combo_material">
+      <property name="toolTip">
+       <string>秤台/模块材质，必填。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>碳钢</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>不锈钢</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>混合</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="2" column="0">
+     <widget class="QLabel" name="label_m_brand">
+      <property name="text">
+       <string>传感器品牌</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="1">
+     <widget class="QComboBox" name="combo_m_brand">
+      <property name="toolTip">
+       <string>传感器/模块品牌；模块与台秤必填，平台秤可选。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>FT</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>AW</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>FAB</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="2" column="2">
+     <widget class="QLabel" name="label_c_brand">
+      <property name="text">
+       <string>仪表品牌</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="3">
+     <widget class="QComboBox" name="combo_c_brand">
+      <property name="toolTip">
+       <string>仪表(控制器)品牌，必填。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>FT</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>AW</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>FAB</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="3" column="0">
+     <widget class="QLabel" name="label_c_family">
+      <property name="text">
+       <string>仪表系列</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="1">
+     <widget class="QComboBox" name="combo_c_family">
+      <property name="toolTip">
+       <string>用户点名仪表系列（如 3306/FAB330），engine 按系列收敛。</string>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+      <property name="placeholderText">
+       <string>如：3306</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="2">
+     <widget class="QLabel" name="label_size">
+      <property name="text">
+       <string>台面尺寸（米）</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="3">
+     <widget class="QComboBox" name="combo_size">
+      <property name="toolTip">
+       <string>秤台尺寸，格式 长x宽（米）；平台秤、台秤必填。</string>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+      <property name="placeholderText">
+       <string>如：1.2x1.5</string>
+      </property>
+      <item>
+       <property name="text">
+        <string>0.6x0.8</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>0.8x0.8</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1x1</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1.2x1.2</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1.2x1.5</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1.5x1.5</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1.5x2</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>2x2</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="4" column="0">
+     <widget class="QLabel" name="label_e_input">
+      <property name="text">
+       <string>分度值e（kg）</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="4" column="1">
+     <widget class="QComboBox" name="combo_e_input">
+      <property name="toolTip">
+       <string>精度要求/分度值/e值；台秤可填克(g)值，自动换算。</string>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+      <property name="placeholderText">
+       <string>如：20</string>
+      </property>
+      <item>
+       <property name="text">
+        <string>5</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>10</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>20</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>50</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="4" column="2">
+     <widget class="QLabel" name="label_r_input">
+      <property name="text">
+       <string>额定量程（kg）</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="4" column="3">
+     <widget class="QComboBox" name="combo_r_input">
+      <property name="toolTip">
+       <string>额定容量/量程；平台秤、台秤必填(量程向上取档)，模块线为计量推算入参。</string>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+      <property name="placeholderText">
+       <string>如：3000</string>
+      </property>
+      <item>
+       <property name="text">
+        <string>60</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>150</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>300</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>600</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1500</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>3000</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>6000</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>10000</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="5" column="0">
+     <widget class="QLabel" name="label_vibration">
+      <property name="text">
+       <string>搅拌</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="1">
+     <widget class="QComboBox" name="combo_vibration">
+      <property name="toolTip">
+       <string>是否带搅拌；带搅拌时需填转速。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>无搅拌</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>带搅拌</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="5" column="2">
+     <widget class="QLabel" name="label_RPM">
+      <property name="text">
+       <string>搅拌转速</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="3">
+     <widget class="QComboBox" name="combo_RPM">
+      <property name="toolTip">
+       <string>搅拌转速（RPM）；高速搅拌影响传感器选型（拉杆）。</string>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+      <property name="placeholderText">
+       <string>如：960</string>
+      </property>
+      <item>
+       <property name="text">
+        <string>200</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>500</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>960</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1450</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="6" column="0">
+     <widget class="QLabel" name="label_installForm">
+      <property name="text">
+       <string>秤体-仪表连接</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="1">
+     <widget class="QComboBox" name="combo_installForm">
+      <property name="toolTip">
+       <string>秤体与仪表的连接形式：一体/分体；台秤缺省一体。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>一体</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>分体</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="6" column="2">
+     <widget class="QLabel" name="label_bracket">
+      <property name="text">
+       <string>分体仪表支架</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="3">
+     <widget class="QComboBox" name="combo_bracket">
+      <property name="toolTip">
+       <string>分体安装时的仪表支架；选「分体」后可用。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>壁挂支架</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>立杆支架</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="7" column="0">
+     <widget class="QLabel" name="label_install">
+      <property name="text">
+       <string>仪表安装方式</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="7" column="1">
+     <widget class="QComboBox" name="combo_install">
+      <property name="toolTip">
+       <string>仪表(控制器)安装方式，按此筛选仪表。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>面板式</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>导轨式</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>防尘式</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>隔爆</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="7" column="2">
+     <widget class="QLabel" name="label_power">
+      <property name="text">
+       <string>供电方式</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="7" column="3">
+     <widget class="QComboBox" name="combo_power">
+      <property name="toolTip">
+       <string>仪表供电方式，按此筛选仪表。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>AC220V</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>DC24V</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="8" column="0">
+     <widget class="QLabel" name="label_req_com1">
+      <property name="text">
+       <string>串口通讯</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="8" column="1">
+     <widget class="QComboBox" name="combo_req_com1">
+      <property name="toolTip">
+       <string>基础串口需求组合；缺省（不选）为单一基础串口。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>RS232</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>RS485</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>RS232+RS485</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Modbus</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Modbus（2路）</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="8" column="2">
+     <widget class="QLabel" name="label_channels">
+      <property name="text">
+       <string>通道数</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="8" column="3">
+     <widget class="QComboBox" name="combo_channels">
+      <property name="toolTip">
+       <string>多通道需求：2通道及以上按多通道选型。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1通道</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>2通道</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>3通道</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>4通道</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="9" column="0">
+     <widget class="QLabel" name="label_req_com2">
+      <property name="text">
+       <string>扩展通讯</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="9" column="1">
+     <widget class="CheckableComboBox" name="combo_req_com2">
+      <property name="toolTip">
+       <string>扩展通讯协议，可多选；无扩展通讯时留空。</string>
+      </property>
+     </widget>
+    </item>
+    <item row="9" column="2">
+     <widget class="QLabel" name="label_battery">
+      <property name="text">
+       <string>电池方案</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="9" column="3">
+     <widget class="QComboBox" name="combo_battery">
+      <property name="toolTip">
+       <string>是否需要电池供电。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>带电池</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+    <item row="10" column="0">
+     <widget class="QLabel" name="label_required_ex">
+      <property name="text">
+       <string>防爆等级</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="10" column="1">
+     <widget class="QComboBox" name="combo_required_ex">
+      <property name="toolTip">
+       <string>勾选「是否防爆」后可选；不选时缺省 IIBT4（业务最低防爆等级）。</string>
+      </property>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>IIBT4</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>IICT4</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>IIBT5</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>IICT5</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>IIBT6</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>IICT6</string>
+       </property>
+      </item>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QLabel" name="label_2">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>80</y>
+     <width>91</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>28</pointsize>
+    </font>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">color: rgb(120, 120, 120)</string>
+   </property>
+   <property name="text">
+    <string>条目</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignmentFlag::AlignCenter</set>
+   </property>
+  </widget>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>CheckableComboBox</class>
+   <extends>QComboBox</extends>
+   <header>COPA.apps.MultiCombo</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

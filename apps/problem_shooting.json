@@ -1,0 +1,291 @@
+{
+    "ENGINE_ERROR": {
+        "title": "选型过程出错",
+        "description": "engine 在计算中途失败，未能完成选型。",
+        "suggestions": [
+            "按错误信息补全缺少的必要参数",
+            "检查参数取值是否超出数据库范围"
+        ]
+    },
+
+    "SENSOR_EX_NO_MATCH": {
+        "title": "传感器防爆要求无法匹配",
+        "description": "防爆要求过滤后没有剩余传感器可选。",
+        "suggestions": [
+            "确认是否真的需要防爆",
+            "确认防爆等级要求是否填写正确"
+        ]
+    },
+
+    "SENSOR_SF_NO_MATCH": {
+        "title": "传感器安全系数无法匹配",
+        "description": "现有传感器按支撑点计算的安全系数(SF)全部偏高或偏低，没有落在可用区间。",
+        "suggestions": [
+            "检查料重/设备自重是否填写正确",
+            "检查支撑点数量是否合理",
+            "考虑调整支撑点数量改变单点载荷"
+        ]
+    },
+
+    "SENSOR_NO_MATCH": {
+        "title": "传感器无法匹配",
+        "description": "传感器数据库中没有满足当前条件的型号。",
+        "suggestions": [
+            "检查料重/设备自重/支撑点参数",
+            "确认传感器品牌数据库是否已加载"
+        ]
+    },
+
+    "MODULE_NO_MATCH": {
+        "title": "模块无法匹配",
+        "description": "当前传感器、模块材质及安装孔距条件组合下没有可用模块。",
+        "suggestions": [
+            "检查模块材质要求",
+            "检查传感器品牌",
+            "检查支撑点数量及重量参数"
+        ]
+    },
+
+    "MODULE_SENSOR_FAMILY_NO_MATCH": {
+        "title": "传感器无配套模块",
+        "description": "选中的传感器系列在模块数据库中没有配套模块。",
+        "suggestions": [
+            "更换传感器系列",
+            "确认模块数据库是否包含该传感器系列"
+        ]
+    },
+
+    "MODULE_EX_NO_MATCH": {
+        "title": "模块防爆要求无法匹配",
+        "description": "配套模块的防爆属性与项目防爆要求不一致。",
+        "suggestions": [
+            "确认项目是否需要防爆",
+            "更换支持防爆的传感器系列"
+        ]
+    },
+
+    "MODULE_MATERIAL_NO_MATCH": {
+        "title": "模块材质无法匹配",
+        "description": "配套模块的材质不满足项目材质要求。",
+        "suggestions": [
+            "检查模块材质要求(碳钢/不锈钢)",
+            "更换其他传感器系列对应的模块"
+        ]
+    },
+
+    "MODULE_HOLE_NO_MATCH": {
+        "title": "模块安装孔距不匹配",
+        "description": "模块安装孔距与传感器安装孔距不一致。",
+        "suggestions": [
+            "更换孔距一致的传感器或模块系列"
+        ]
+    },
+
+    "PLATFORM_NO_MATCH": {
+        "title": "平台秤无法匹配",
+        "description": "当前条件下平台秤数据库中没有可用型号。",
+        "suggestions": [
+            "检查量程/台面尺寸/材质/精度输入",
+            "确认平台秤数据库已加载"
+        ]
+    },
+
+    "PLATFORM_BRAND_NO_MATCH": {
+        "title": "平台秤品牌无记录",
+        "description": "平台秤数据库中没有所请求品牌的记录。",
+        "suggestions": [
+            "确认品牌拼写(FT/AW)",
+            "更换平台秤品牌"
+        ]
+    },
+
+    "PLATFORM_SUBTYPE_NO_MATCH": {
+        "title": "平台秤品类无记录",
+        "description": "该品牌下没有所请求品类(护框型/高精度)的平台秤。",
+        "suggestions": [
+            "尝试切换高精度选项",
+            "更换平台秤品牌"
+        ]
+    },
+
+    "PLATFORM_MATERIAL_NO_MATCH": {
+        "title": "平台秤材质无法匹配",
+        "description": "该品牌品类下没有所请求材质的平台秤。",
+        "suggestions": [
+            "检查材质输入(C/碳钢、S/不锈钢 或 CS/混合)",
+            "尝试更换材质"
+        ]
+    },
+
+    "PLATFORM_EX_NO_MATCH": {
+        "title": "平台秤防爆要求无法匹配",
+        "description": "该组合下没有符合防爆要求的平台秤。",
+        "suggestions": [
+            "确认项目是否需要防爆",
+            "尝试更换材质或品类"
+        ]
+    },
+
+    "PLATFORM_RANGE_NO_MATCH": {
+        "title": "平台秤量程无法满足",
+        "description": "需求量程超出该组合下平台秤的最大量程档位。",
+        "suggestions": [
+            "检查量程输入是否正确",
+            "考虑改用称重模块方案"
+        ]
+    },
+
+    "PLATFORM_SIZE_NO_MATCH": {
+        "title": "平台秤台面尺寸无法匹配",
+        "description": "该量程档位下没有所请求的台面尺寸。",
+        "suggestions": [
+            "按提示的可选台面尺寸调整需求",
+            "清空台面尺寸让系统推荐"
+        ]
+    },
+
+    "PLATFORM_E_NO_MATCH": {
+        "title": "平台秤分度值无法满足",
+        "description": "该组合下平台秤的分度值达不到精度要求。",
+        "suggestions": [
+            "放宽分度值(精度)要求",
+            "尝试高精度品类"
+        ]
+    },
+
+    "BENCH_NO_MATCH": {
+        "title": "台秤无法匹配",
+        "description": "当前条件下台秤数据库中没有可用型号。",
+        "suggestions": [
+            "检查量程/台面尺寸/材质/精度输入",
+            "确认台秤数据库已加载"
+        ]
+    },
+
+    "BENCH_BRAND_NO_MATCH": {
+        "title": "台秤品牌无记录",
+        "description": "台秤数据库中没有所请求品牌的记录。",
+        "suggestions": [
+            "确认品牌拼写(FT/AW)",
+            "更换台秤品牌"
+        ]
+    },
+
+    "BENCH_SUBTYPE_NO_MATCH": {
+        "title": "台秤品类无记录",
+        "description": "该品牌下没有所请求品类(电子台秤/高精度电子台秤)的台秤。",
+        "suggestions": [
+            "尝试切换高精度选项",
+            "更换台秤品牌"
+        ]
+    },
+
+    "BENCH_MATERIAL_NO_MATCH": {
+        "title": "台秤材质无法匹配",
+        "description": "该品牌品类下没有所请求材质的台秤。",
+        "suggestions": [
+            "检查材质输入(C/碳钢、S/不锈钢 或 CS/混合)",
+            "尝试更换材质"
+        ]
+    },
+
+    "BENCH_EX_NO_MATCH": {
+        "title": "台秤防爆要求无法匹配",
+        "description": "该组合下没有符合防爆要求的台秤。",
+        "suggestions": [
+            "确认项目是否需要防爆",
+            "尝试更换材质或品类"
+        ]
+    },
+
+    "BENCH_RANGE_NO_MATCH": {
+        "title": "台秤量程无法满足",
+        "description": "需求量程超出该组合下台秤的最大量程档位。",
+        "suggestions": [
+            "检查量程输入是否正确",
+            "考虑改用平台秤方案"
+        ]
+    },
+
+    "BENCH_SIZE_NO_MATCH": {
+        "title": "台秤台面尺寸无法匹配",
+        "description": "该量程档位下没有所请求的台面尺寸。",
+        "suggestions": [
+            "按提示的可选台面尺寸调整需求",
+            "清空台面尺寸让系统推荐"
+        ]
+    },
+
+    "BENCH_E_NO_MATCH": {
+        "title": "台秤分度值无法满足",
+        "description": "该组合下台秤的分度值达不到精度要求。",
+        "suggestions": [
+            "放宽分度值(精度)要求",
+            "尝试高精度品类"
+        ]
+    },
+
+    "CONTROLLER_NO_MATCH": {
+        "title": "仪表无法匹配",
+        "description": "当前条件下仪表数据库中没有可用型号。",
+        "suggestions": [
+            "检查通讯/安装/供电/防爆等要求",
+            "尝试更换仪表品牌"
+        ]
+    },
+
+    "CONTROLLER_BRAND_NO_MATCH": {
+        "title": "仪表品牌无记录",
+        "description": "仪表数据库中没有所请求品牌的记录。",
+        "suggestions": [
+            "确认仪表品牌输入(FT/3306等)",
+            "更换仪表品牌"
+        ]
+    },
+
+    "CONTROLLER_FAMILY_NO_MATCH": {
+        "title": "仪表系列不适配当前业务",
+        "description": "所选仪表系列不适用于当前条目类型。",
+        "suggestions": [
+            "更换仪表系列",
+            "确认条目类型是否选择正确"
+        ]
+    },
+
+    "CONTROLLER_COM_NO_MATCH": {
+        "title": "仪表通讯要求无法匹配",
+        "description": "当前仪表数据库中没有同时满足基础通讯与扩展通讯要求的型号。",
+        "suggestions": [
+            "检查基础通讯需求是否填写正确",
+            "尝试取消不必要的扩展通讯需求",
+            "尝试关闭多通道要求"
+        ]
+    },
+
+    "CONTROLLER_HARDWARE_NO_MATCH": {
+        "title": "仪表硬件要求无法匹配",
+        "description": "安装方式/支架/供电等硬件要求过滤后没有剩余仪表。",
+        "suggestions": [
+            "检查安装方式与支架选择",
+            "尝试更换供电方式(AC220V/DC24V)"
+        ]
+    },
+
+    "CONTROLLER_EX_NO_MATCH": {
+        "title": "仪表防爆要求无法匹配",
+        "description": "当前品牌仪表中没有满足所需防爆等级的型号。",
+        "suggestions": [
+            "确认防爆等级要求是否填写正确",
+            "尝试更换仪表品牌"
+        ]
+    },
+
+    "JBOX_NO_MATCH": {
+        "title": "接线盒无法匹配",
+        "description": "规则表中没有当前品牌/防爆组合对应的接线盒型号。",
+        "suggestions": [
+            "确认模块品牌与防爆要求组合",
+            "检查接线盒选型规则表"
+        ]
+    }
+}
