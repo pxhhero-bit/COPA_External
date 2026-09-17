@@ -17,6 +17,27 @@ Quotation
 
 (and more, someday)
 ```
+## Screenshots
+
+### Requirement Input
+
+![Requirement Input](manual/input.png)
+
+### Review and Confirmation
+
+![Review and Confirmation](manual/checklist_2.png)
+
+![Review and Confirmation](manual/checklist_3.png)
+
+### Quotation Output
+
+![Quotation Output](manual/output.png)
+
+### Technical Document
+
+![Technical Document](manual/sDoc_2.png)
+
+![Technical Document](manual/sDoc_3.png)
 
 ## Key Features
 
