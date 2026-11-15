@@ -3,7 +3,9 @@
 使用说明/关于COPA/反馈与优化。
 
 左侧工具栏已接：A=新建报价项目(Desk，同菜单「新建」)；B=sDocBuilder
-技术方案编排(在 MDI 内新建可拖动子窗口，独立于报价项目)。
+技术方案编排(在 MDI 内新建可拖动子窗口，独立于报价项目)；
+C=报价诊断(Audit，同菜单「工具 -> 报价诊断」，上传报价单做一致性
+检查并出批阅副本)。
 
 默认输入方式(设置菜单)：选择需求录入窗口默认显示的输入页签(输入框输入/
 下拉菜单输入)，QSettings 持久化记忆，对之后新建/打开快照的项目生效。
@@ -28,8 +30,9 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+import shiboken6
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QIcon, QPixmap, QPixmap
+from PySide6.QtGui import QBrush, QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QApplication, QFileDialog,
                                QGridLayout, QMainWindow, QMdiArea,
                                QMdiSubWindow, QMessageBox, QVBoxLayout)
@@ -39,14 +42,15 @@ from PySide6.QtWidgets import (QAbstractButton, QApplication, QFileDialog,
 # Snapshot 为项目快照(保存菜单)的采集与 markdown 渲染
 from COPA.apps import Snapshot, app_icon
 from COPA.apps.About import AboutDialog
+from COPA.apps.Audit import AuditPanel, audit_icon
 from COPA.apps.Checklist import Checklist
+from COPA.apps.contract import _failure_reason
 from COPA.apps.Desk import (DEFAULT_INPUT_GUI, DEFAULT_INPUT_TEXT, Desk,
-                            EngineService, default_input_mode,
-                            set_default_input_mode)
+                            EngineService, GuiCard, QuoteCard,
+                            default_input_mode, set_default_input_mode)
 from COPA.apps.Feedback import FeedbackDialog
 from COPA.apps.Manual import ManualDialog
 from COPA.apps.Ui_commander import Ui_MainWindow
-
 
 class Commander(QMainWindow, Ui_MainWindow):
 
@@ -109,6 +113,12 @@ class Commander(QMainWindow, Ui_MainWindow):
 
         # 使用说明指引窗口：非模态单例，首次触发时创建并复用
         self._manual = None
+        self._llm_workflow = None
+
+        # 报价诊断面板(Audit)：与 Desk 一样挂 MDI 子窗口，单例复用；
+        # _audit_sub 记住它的子窗口，关掉只是隐藏（批阅线程与结果都保留）
+        self._audit = None
+        self._audit_sub = None
 
         # 菜单：新建/打开/保存/关闭当前/关闭所有 + 默认输入方式 +
         # 使用说明/关于COPA + 反馈与优化
@@ -135,6 +145,12 @@ class Commander(QMainWindow, Ui_MainWindow):
         # 动作编辑器里设置即可
         self.actionToolA.triggered.connect(self._new_project)
         self.actionToolB.triggered.connect(self._new_sdoc)
+        self.actionLlmChat.triggered.connect(self._open_llm_chat)
+        # 工具栏 C / 菜单「工具 -> 报价诊断」：图标用人工选好的那个；
+        # Designer 里的 theme 图标在 Windows 可能取不到，取不到才回退
+        self.actionToolC.triggered.connect(self._open_audit)
+        if self.actionToolC.icon().isNull():
+            self.actionToolC.setIcon(audit_icon())
 
         # 激活的子窗口即「当前项目」，供关闭当前定位
         self.mdi.subWindowActivated.connect(self._on_sub_activated)
@@ -146,6 +162,162 @@ class Commander(QMainWindow, Ui_MainWindow):
         self._new_project()
 
     # ====项目管理====
+
+    def _open_llm_chat(self):
+        """对话选型：与「选型报价」一致，挂成 MDI 子窗口（单例复用）。
+
+        对话选型与手工录入是同一条流水线的两个入口：启动时默认开着的
+        那张空白「需求录入」在这里收掉，免得两个入口并排争位置。已经
+        录过参数的项目不动——那是正在做的工作，不能替用户丢。
+        """
+        if self._llm_workflow is None:
+            from COPA.apps.LlmWorkflow import LlmQuoteWorkflow
+            try:
+                self._llm_workflow = LlmQuoteWorkflow(
+                    self, mdi=self.mdi, can_start=lambda: not self._engine_busy)
+            except Exception as exc:
+                # 规则或配置缺失必须显式失败，而不是打开一个空壳窗口。
+                QMessageBox.critical(self, "LLM 模块不可用", str(exc))
+                return
+            self._llm_workflow.statusChanged.connect(self.statusbar.showMessage)
+        self._close_empty_desks()
+        self._llm_workflow.open()
+
+    @staticmethod
+    def _value_is_blank(value):
+        if isinstance(value, (list, tuple, dict, set)):
+            return len(value) == 0
+        return not value
+
+    @classmethod
+    def _card_is_blank(cls, card):
+        """卡片是否还是空的。两张卡片创建时各带一个空壳（类型下拉有默认
+        首项），所以不能按容器条目数判断，要看卡片内容。"""
+
+        if isinstance(card, QuoteCard):
+            data = card.getEntryData()
+            if str(data.get("description") or "").strip():
+                return False
+            return not any(data.get(key) for key in (
+                "metrology", "high_precision", "Ex_P", "digital"))
+        if isinstance(card, GuiCard):
+            data = card.getEntryData()
+            if any(data.get(key) for key in (
+                    "metrology", "high_precision", "Ex_P", "digital")):
+                return False
+            for key, value in (data.get("structured") or {}).items():
+                if key == "item_type":
+                    continue
+                if not cls._value_is_blank(value):
+                    return False
+            return True
+        return False
+
+    @classmethod
+    def _desk_is_empty(cls, desk):
+        """需求录入窗是否还是空白：两种录入方式的所有卡片都是空壳。"""
+
+        for name in ("cardContainerLayout", "guiCardContainerLayout"):
+            layout = getattr(desk, name, None)
+            if layout is None:
+                continue
+            for index in range(layout.count()):
+                item = layout.itemAt(index)
+                card = item.widget() if item is not None else None
+                if card is None:
+                    continue
+                if not cls._card_is_blank(card):
+                    return False
+        return True
+
+    def _close_empty_desks(self):
+        for project_id, desk in list(self._projects.items()):
+            if not self._desk_is_empty(desk):
+                continue
+            sub = self._sub_of(desk)
+            # 已经隐藏的窗口交给排队中的清理，重复 close 会排两次删除。
+            if sub is not None and sub.isVisible():
+                # 走 Close 事件 -> _remove_sub_window 的统一清理路径。
+                sub.close()
+
+    def _audit_panel_alive(self) -> bool:
+        """诊断面板是否还活着。
+
+        面板和子窗口都可能被 Qt 侧销毁（关闭流程、统一清理路径），而
+        Python 侧仍握着引用——只剩一层空壳，一碰就
+        RuntimeError: Internal C++ object already deleted。凡是触碰
+        self._audit / self._audit_sub 的地方都先过这两道。
+        """
+        return self._audit is not None and shiboken6.isValid(self._audit)
+
+    def _audit_sub_alive(self) -> bool:
+        return self._audit_sub is not None and shiboken6.isValid(self._audit_sub)
+
+    def _mount_audit_sub(self, panel):
+        """把诊断面板挂成 MDI 子窗口，并钉住「关闭即隐藏」的语义。"""
+
+        sub = self.mdi.addSubWindow(panel)
+        sub.setWindowIcon(self._transparent_icon())
+        # addSubWindow 默认打开 WA_DeleteOnClose：点一次标题栏 X，子窗口
+        # 连面板一起被 deleteLater，之后再点工具栏 C 就只剩空壳
+        # （RuntimeError: QMdiSubWindow already deleted）。诊断结果是
+        # 「收起还要接着看」的东西，这个属性必须是关的。
+        sub.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        sub.move(0, 0)
+        viewport = self.mdi.viewport().size()
+        sub.resize(min(panel.width(), viewport.width()),
+                   min(panel.height(), viewport.height()))
+        sub.installEventFilter(self)
+        panel.show()
+        self._audit_sub = sub
+        return sub
+
+    def _open_audit(self):
+        """工具栏 C / 菜单「工具 -> 报价诊断」：与「选型报价」同一装配路径，
+        挂成 MDI 子窗口（单例复用）。批阅线程由面板自治，Commander 只负责
+        装配与前置；子窗口被关掉后只是隐藏，再点回来接着看结果。
+
+        自愈：面板或子窗口任一被外部销毁过，就按「能救的救、救不了的
+        重建」补回来，保证这个入口永远打得开。"""
+        rebuilt = self._audit is not None and not self._audit_panel_alive()
+        if not self._audit_panel_alive():
+            # 面板已被销毁：里面的批阅结果一起没了，只能重建一份新面板
+            self._audit = None
+        if not self._audit_sub_alive():
+            self._audit_sub = None
+
+        if self._audit is None:
+            self._audit = AuditPanel()
+            self._mount_audit_sub(self._audit)
+        elif self._audit_sub is None:
+            # 面板还在、只是子窗口没了：重新挂一次，结果不丢
+            self._mount_audit_sub(self._audit)
+
+        if self._audit_sub is not None:
+            self._audit_sub.show()
+            # 子窗口关闭时会把内部控件一起 close()，控件因此带上「显式隐藏」
+            # 标记；只 show 子窗口会得到一个只剩标题栏的空白壳。这里必须把
+            # 面板本身也 show 一次，才能真正把内容带回来。
+            self._audit.show()
+            self._audit_sub.raise_()
+            self._audit_sub.setFocus()
+        self.statusbar.showMessage(
+            "报价诊断已打开（上一次被销毁，已重建面板）" if rebuilt
+            else "报价诊断已打开")
+
+    def closeEvent(self, event):
+        workflow = self._llm_workflow
+        if workflow is not None:
+            # 对话窗体可能已被用户点 X 销毁（子窗口带 WA_DeleteOnClose），
+            # 直接读 busy 会命中野指针。
+            dialog = workflow.dialog
+            active = dialog is not None and shiboken6.isValid(dialog) and dialog.busy
+            if workflow.busy or active:
+                self.statusbar.showMessage("对话或选型正在处理，请完成后关闭COPA")
+                event.ignore()
+                return
+            workflow.close()
+        super().closeEvent(event)
 
     def _next_project_id(self):
         """新项目ID：首个为 Untitled (1)，其后依次 Untitled (2)、Untitled (3)..."""
@@ -337,6 +509,40 @@ class Commander(QMainWindow, Ui_MainWindow):
         self._snapshot_created.setdefault(project_id, now)
         self.statusbar.showMessage("{} 快照已保存：{}".format(project_id, path))
 
+    def _ensure_snapshot_path(self, project_id):
+        """出单前确保项目有一份快照，返回路径；失败返回空串。
+
+        静默保存、不弹命名框：用户此刻正在出报价，半路弹「保存快照」会打断
+        他。默认名与保存菜单一致（项目ID_时刻.md），之后 Ctrl+S 仍走原来的
+        对话框/覆盖逻辑。拿不到路径时这份单就没有基线，不影响出报价。
+        """
+        if not project_id:
+            return ""
+
+        path = self._snapshot_paths.get(project_id)
+
+        if path and os.path.exists(path):
+            return path
+
+        desk = self._projects.get(project_id)
+
+        if desk is None:
+            return ""
+
+        try:
+            saved = Snapshot.save_snapshot(
+                path or Snapshot.suggest_path(project_id), project_id, desk,
+                checklist=self._checklists.get(project_id),
+                created_at=self._snapshot_created.get(project_id),
+            )
+        except Exception:               # 存不下也只是没基线，别拦住出单
+            return ""
+
+        self._snapshot_paths[project_id] = saved
+        self._snapshot_created.setdefault(
+            project_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        return saved
+
     def _choose_default_input(self):
         """设置 -> 默认输入方式：选择需求录入窗口默认显示的输入页签并
         记忆(QSettings 持久化)；对之后新建/打开快照的项目生效，
@@ -392,6 +598,15 @@ class Commander(QMainWindow, Ui_MainWindow):
         # 子窗口关闭：延迟到关闭流程结束后清理，避免在 Close 事件中途拆结构
         if (event.type() == QEvent.Type.Close
                 and isinstance(watched, QMdiSubWindow)):
+            # 诊断面板收起即隐藏：批阅线程可能还在跑，销毁窗口会崩。
+            # 判等同时看子窗口和面板——任一侧引用过期（比如子窗口被外部
+            # 重建过）都不会漏判成「可以删」，否则下一次点工具栏 C 直接
+            # 撞 Internal C++ object already deleted。
+            if watched is self._audit_sub or (
+                    self._audit_panel_alive()
+                    and watched.widget() is self._audit):
+                watched.hide()
+                return True
             QTimer.singleShot(0, lambda: self._remove_sub_window(watched))
 
         return super().eventFilter(watched, event)
@@ -416,7 +631,14 @@ class Commander(QMainWindow, Ui_MainWindow):
         return title.rsplit(" - ", 1)[-1]
 
     def _remove_sub_window(self, sub):
+        # 排队清理期间状态可能变了（窗口被重建/已销毁）：先过一遍有效性，
+        # 再挡掉诊断面板——它是单例，只能隐藏不能删，删了入口就失效。
+        if not shiboken6.isValid(sub):
+            return
         widget = sub.widget()
+        if self._audit is not None and widget is self._audit:
+            sub.hide()
+            return
         project_id = self._project_of(widget)
 
         if project_id is not None:
@@ -545,6 +767,9 @@ class Commander(QMainWindow, Ui_MainWindow):
 
         if checklist is None:
             checklist = Checklist()
+            # 出单时把「本项目快照在哪」告诉清单：报价成功后基线要追加进去
+            checklist.snapshot_provider = (
+                lambda sid=project_id: self._ensure_snapshot_path(sid))
 
             if not self._checklist_title_base:
                 self._checklist_title_base = self._strip_title_base(
@@ -663,7 +888,7 @@ class Commander(QMainWindow, Ui_MainWindow):
     def _start_selection(self, project_id, entries):
         """Desk 发起选型：整批次丢后台线程串行计算，完成经信号回 GUI 线程。
         同一时刻只跑一个批次(engine 服务共享，串行免除并发隐患)"""
-        if self._engine_busy:
+        if self._engine_busy or (self._llm_workflow is not None and self._llm_workflow.busy):
             self.statusbar.showMessage("选型计算进行中，请稍候再试")
             return
 
@@ -717,18 +942,13 @@ class Commander(QMainWindow, Ui_MainWindow):
             self._open_checklist(project_id, results)
 
     def _show_selection_failures(self, failures):
-        """选型未通过弹窗：逐条列出 quote_id 与原因(ERROR透出错误明细,
-        NO_MATCH为固定提示文案)，仅「返回修改」一个按钮；确认后流程终止"""
+        """选型未通过弹窗：逐条列出 quote_id 与具体原因(缺参/取值非法走
+        ERROR 明细，数据库无匹配走诊断里的环节说明)，仅「返回修改」按钮"""
         lines = []
 
         for r in failures:
-            if r.get("status") == "NO_MATCH":
-                reason = "当前需求在数据库中没有匹配方案，请核查。"
-            else:
-                reason = r.get("error", "")
-
             lines.append("条目 {}：{}".format(
-                r.get("quote_id") or 0, reason))
+                r.get("quote_id") or 0, _failure_reason(r)))
 
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
@@ -760,14 +980,8 @@ class Commander(QMainWindow, Ui_MainWindow):
 
 
 if __name__ == "__main__":
-    # Windows 任务栏图标：显式声明 AppUserModelID，否则窗口被按
-    # python.exe 进程分组，任务栏显示的是 Python 图标而非窗口图标
-    if sys.platform == "win32":
-        import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            "COPA.Commander.1")
-    app = QApplication([])
-    app.setWindowIcon(app_icon())          # 应用级默认：全部弹窗继承
-    window = Commander()
-    window.show()
-    app.exec()
+    # 启动序列统一在 COPA.launch 里，打包入口也指向它——那里把业务模块的
+    # 导入挪到了启动画面之后。此处保留只为让 `py -m COPA.main` 仍可运行。
+    from COPA.launch import main as _launch
+
+    raise SystemExit(_launch())

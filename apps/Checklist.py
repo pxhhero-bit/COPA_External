@@ -4,11 +4,12 @@
 engine 回传多个选型选项时，各产品 combobox 据结果构建下拉选项供人工确认。
 
 
-v1.5 起 Checker/Diagnostic 模块挂起：自动解决方案与诊断徽章相关代码注释停用，
-Diagnostic.missing_models(选型数据缺失提示)迁入本模块并改为 CLI 输出。"""
+v1.6 起 Checker/Diagnostic 已删除：自动解决方案与诊断徽章功能不再存在，
+选型数据缺失提示改由本模块的 CLI 输出承接。"""
 import csv
 import functools
 import os
+import re
 import sys
 
 # 直接以脚本方式运行时，把项目根目录加入 sys.path，使 COPA 包可以常规导入
@@ -19,12 +20,13 @@ _PROJECT_ROOT = os.path.dirname(
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+from typing import Callable
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog,
-                               QMessageBox, QPushButton, QVBoxLayout, QWidget)
+                               QLabel, QMessageBox, QPushButton, QVBoxLayout,
+                               QWidget)
 
-# import Checker      # v1.5: Checker 模块挂起，恢复时取消注释
-# import Diagnostic   # v1.5: Diagnostic 模块挂起，missing_models 已迁入本模块
 from COPA.apps import Writer, app_icon
 from COPA.apps.Ui_quoteChecklist import Ui_quoteChecklist
 from COPA.apps.Ui_quoteListItem import Ui_Form as Ui_QuoteListItem
@@ -90,10 +92,48 @@ _NECESSARY_FIELDS = (
     ("controllerComBox_2", "install"),
 )
 
+# 程序代为处理或留空的字段，在清单顶部以红色横条提示人工核对。
+# source 由 llm_chat 写进 provenance，Desk 手工路径与对话路径共用同一套判定。
+_PENDING_SOURCES = ("default_unspecified", "left_unset")
+# 与 llm_chat._FORCE_QUOTE_LABELS 同口径：横幅是给人看的，字段名必须中文化。
+_PENDING_LABELS = {
+    "W2": "皮重",
+    "vibration": "高速搅拌",
+    "RPM": "搅拌转速",
+    "req_com2": "拓展通讯",
+    "e_input": "精度要求",
+    "c_family": "仪表型号",
+    "台面尺寸": "台面尺寸",
+}
+_PENDING_QSS = (
+    "background:#FDECEA; border:1px solid #D9534F; border-radius:4px;"
+    " color:#8B1A16; padding:6px 8px;"
+)
+
+# 安全系数色块分区(清单人工确认用的三色提示)：SF<1.3 红、1.3~2.0 绿、
+# 2.0~2.5 黄、≥2.5 红。engine 侧 SF_verification 分四段(2.0-2.3 提醒 /
+# 2.3-2.5 警告)，清单只看"过小 / 常规 / 偏大 / 过大"的观感，黄段合并 2.0-2.5。
+# 元组：(下界(含), 上界(不含), 底色, 说明)
+_SF_CHIP_ZONES = (
+    (None, 1.3, "#E53935", "安全系数偏小(SF<1.3)，建议增大传感器容量或增加支点"),
+    (1.3, 2.0, "#43A047", "常规范围(1.3≤SF<2.0)"),
+    (2.0, 2.5, "#FFD600", "安全系数偏大(2.0≤SF<2.5)，建议复核"),
+    (2.5, None, "#E53935", "安全系数过大(SF≥2.5)，请人工复核"),
+)
+
+
+def sf_zone(sf):
+    """安全系数 -> (底色, 说明)；区间左闭右开，边界值归上一档"""
+    for low, high, color, desc in _SF_CHIP_ZONES:
+        if (low is None or sf >= low) and (high is None or sf < high):
+            return color, desc
+
+    return _SF_CHIP_ZONES[-1][2], _SF_CHIP_ZONES[-1][3]
+
 
 # ---------------------------------------------------------------------------
-# 选型数据缺失调试：自 Diagnostic v1.0 迁入(Diagnostic 模块挂起期由本模块承接)，
-# 结果改为 CLI(控制台)输出，不再驱动 GUI 徽章
+# 选型数据缺失调试：原 Diagnostic.missing_models，随 Diagnostic 退休迁入本模块，
+# 结果走 CLI(控制台)输出，不再驱动 GUI 徽章
 # ---------------------------------------------------------------------------
 
 # 模块业务四类型号 -> engine结果取值判定是否为空
@@ -368,6 +408,20 @@ class QuoteListItem(QWidget, Ui_QuoteListItem):
         self._base_product = None
         self._product_sync = False
 
+        # 安全系数标签 + 色块：文案与几何都在 quoteListItem.ui 里定义
+        # (sfLabel / sfChip)，此处只补运行期行为——鼠标穿透避免抢下拉的
+        # 点击，初始隐藏待选型结果填充
+        for _widget in (self.sfLabel, self.sfChip):
+            _widget.setAttribute(
+                Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            _widget.hide()
+
+        # 本次选型结果的「传感器下拉文本 -> 安全系数」(engine 全量候选，
+        # 含未过筛)；手输型号未命中时按文本容量 + 条目参数复算
+        self._sensor_sf_map = {}
+        # 当前业务是否带传感器行(台秤整机选型无传感器 -> 色块一并隐藏)
+        self._sensor_row_enabled = False
+
         # 类型下拉切换时实时重排标签/显隐/附件选项
         self.comboBox.currentTextChanged.connect(self._apply_pipeline)
         self._apply_pipeline(self.comboBox.currentText())
@@ -378,6 +432,13 @@ class QuoteListItem(QWidget, Ui_QuoteListItem):
 
         # 传感器选择 -> 模块型号实时跟随
         self.sensorComBox.currentTextChanged.connect(self._on_sensor_changed)
+        # 传感器改选(含键入型号，下拉可编辑) -> 安全系数色块同步刷新
+        self.sensorComBox.currentTextChanged.connect(self._refresh_sf_chip)
+        self.sensorComBox.editTextChanged.connect(self._refresh_sf_chip)
+        # 安全系数占位后传感器下拉收窄(170)，长型号("SB14-2268kg-BH-C3
+        # Y=11500")收起时会省略；展开列表保留足够宽度，选中时靠 tooltip 补全
+        self.sensorComBox.view().setMinimumWidth(240)
+        self.sensorComBox.currentTextChanged.connect(self._sync_sensor_tooltip)
         self.derivativeComBox.currentTextChanged.connect(self._on_variant_changed)
 
         # 附件选大屏幕类 -> 弹选型子对话框；任何附件变化同步大屏幕型号行显隐
@@ -431,6 +492,10 @@ class QuoteListItem(QWidget, Ui_QuoteListItem):
                       self.accessoryComBox_3):
             combo.clear()
             combo.addItems(["无"] + _ACCESSORY_OPTIONS.get(type_text, []))
+
+        # 安全系数色块跟随传感器行：台秤整机无传感器行 -> 色块一并隐藏
+        self._sensor_row_enabled = config.get("sensor") is not None
+        self._refresh_sf_chip()
 
         self._rebuild_derivative_options(config)
 
@@ -721,6 +786,86 @@ class QuoteListItem(QWidget, Ui_QuoteListItem):
             self.displayEdit.setText(data["display"])
             self._sync_display_row()
 
+    # ====安全系数色块====
+
+    def _refresh_sf_chip(self, *_args):
+        """按当前传感器型号刷新安全系数色块(SF<1.3 红 / 1.3~2.0 绿 /
+        2.0~2.5 黄 / ≥2.5 红)；SF 无法确定时连同「安全系数」文字标签一并
+        隐藏，不显示猜测值"""
+        if not getattr(self, "_sensor_row_enabled", False):
+            self._show_sf_group(False)
+            return
+
+        sf = self._resolve_sf(self.sensorComBox.currentText())
+
+        if sf is None:
+            self._show_sf_group(False)
+            return
+
+        color, desc = sf_zone(sf)
+        self.sfChip.setStyleSheet(
+            "background-color: {}; color: #000000;"
+            " border: 1px solid #333333; font-size: 8pt; font-weight: bold;"
+            .format(color))
+        self.sfChip.setText("{:.2f}".format(sf))
+        self.sfChip.setToolTip("安全系数 SF={:.2f}：{}".format(sf, desc))
+        self.sfChip.raise_()
+        self._show_sf_group(True)
+
+    def _show_sf_group(self, visible):
+        """「安全系数」文字标签与色块同进同退，避免只剩半组看着莫名其妙"""
+        for widget in (self.sfLabel, self.sfChip):
+            widget.setVisible(visible)
+
+    def _sync_sensor_tooltip(self, text):
+        """型号比下拉框宽时：tooltip 给全文，并把光标归零让显示从型号开头
+        起（否则 editable 下拉会把长文本左端滚出可视区，只剩尾巴）"""
+        self.sensorComBox.setToolTip(
+            text or "鼠标悬停并滚动滚轮可快速切换。打字可补全。")
+
+        if text and not self.sensorComBox.hasFocus():
+            line_edit = self.sensorComBox.lineEdit()
+            if line_edit is not None:
+                line_edit.setCursorPosition(0)
+
+    def _resolve_sf(self, text):
+        """传感器下拉文本 -> 安全系数：先取本次选型结果里 engine 算好的 SF，
+        查不到(手输型号 / 快照恢复)再按文本容量与条目参数(W1/W2/支点)复算；
+        复算条件不全返回 None"""
+        text = (text or "").strip()
+
+        if not text or text == "无匹配":
+            return None
+
+        sf = self._sensor_sf_map.get(text)
+
+        if sf is not None:
+            return float(sf)
+
+        # 下拉文本形如 "SLB-2268kg-BH-C3" / "AWB-0.5t-C3"：取容量段
+        m = re.search(r"-(\d+(?:\.\d+)?)\s*(t|kg)(?![A-Za-z])", text,
+                      re.IGNORECASE)
+
+        if m is None:
+            return None
+
+        capacity = float(m.group(1))
+
+        if m.group(2).lower() == "t":
+            capacity *= 1000
+
+        support = self._params.get("support")
+        w1 = self._params.get("W1")
+        w2 = self._params.get("W2") or 0
+
+        if not support or not w1:
+            return None
+
+        try:
+            return (capacity * float(support)) / (float(w1) + float(w2))
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
     def _on_sensor_changed(self, text):
         """传感器选择 -> 模块型号行实时跟随(匹配该传感器的首个模块组合)。
         产品行为只读展示，模块业务的实际选择权在传感器下拉。
@@ -751,6 +896,14 @@ class QuoteListItem(QWidget, Ui_QuoteListItem):
         # 可见性(如 AW 的 AWB/AWBS 跨材质变体)；旧结构无传感器结果时回退
         # 配对结果导出
         sensor_rows = ((result.get("sensor") or {}).get("sensors")) or []
+        # 安全系数色块的数据源：engine 全量候选(含 SF 未过筛的)，改选型号
+        # 时按下拉文本直接取 SF，不必重算
+        self._sensor_sf_map = {
+            self._sensor_option_text(s): s["SF"]
+            for s in ((result.get("sensor") or {}).get("all_sensors")
+                      or sensor_rows)
+            if s.get("SF") is not None
+        }
 
         if sensor_rows or module_items:
             source = sensor_rows or [m["sensor"] for m in module_items]
@@ -938,6 +1091,11 @@ class QuoteListItem(QWidget, Ui_QuoteListItem):
             # 数字化方案：Writer 据此切换通讯电缆(选型侧已强制FAB/换jbox映射)
             "digital": self.digiCheckBox.isChecked(),
         }
+        # 秤体/传感器品牌(整单)：Writer 的平台秤传感器行按它映射品牌与文案
+        m_brand = str((self._params or {}).get("m_brand") or "").strip()
+
+        if m_brand:
+            project["m_brand"] = m_brand
         result = self._result or {}
 
         if code == "module":
@@ -1203,6 +1361,11 @@ class Checklist(QWidget, Ui_quoteChecklist):
         self.setupUi(self)
         self.setWindowIcon(app_icon())
 
+        # 出单时向 Commander 要「本项目快照在哪」：出单基线要追加进那份 md。
+        # 由 main.py 在创建清单时注入；未注入则这份单不留基线，不影响出报价。
+        # 返回快照路径，取不到时返回空串。
+        self.snapshot_provider: Callable[[], str] | None = None
+
         self.scrollArea.setWidgetResizable(True)
 
         # 公司名称/联系人输入框与报价抬头下拉同高(单行输入观感)；
@@ -1236,14 +1399,6 @@ class Checklist(QWidget, Ui_quoteChecklist):
         # 是否已完成过一次报价输出：已输出时关闭窗口=项目整体完成；
         # 重载新选型结果时复位(load_results)
         self.output_completed = False
-
-        # 诊断控件：缺项警告徽章/悬停提示/诊断子窗，按 item 逐个挂接评估
-        # (v1.5: Diagnostic 模块挂起，数据缺失提示改走 CLI，恢复时取消注释)
-        # self._diagnostic = Diagnostic.Diagnostic(self)
-
-        # 自动解决方案检查器：engine diagnostic -> problem_shooting.json 映射
-        # (v1.5: Checker 模块挂起，恢复时取消注释)
-        # self._checker = Checker.Checker()
 
     def _iter_items(self):
         for i in range(self.checklistLayout.count()):
@@ -1300,9 +1455,7 @@ class Checklist(QWidget, Ui_quoteChecklist):
     def _collect_issues(self):
         """输出前预检：必要项空值(附件1/2/3除外，隐藏项不算)。
         返回 [(item, {"empty": [字段名...], "warn": [缺项名...]})]；
-        warn 通道随 Diagnostic 挂起停用(数据缺失提示改走 CLI)，键保留空列表
-        以兼容 _format_issues。"""
-        # warned = {id(w) for w in self._diagnostic.warning_items()}
+        warn 通道已停用（选型数据缺失改走 CLI），键保留空列表以兼容 _format_issues。"""
         issues = []
 
         for item in self._iter_items():
@@ -1330,9 +1483,6 @@ class Checklist(QWidget, Ui_quoteChecklist):
                     raise ValueError
             except ValueError:
                 empty.append("数量")
-
-            # warn = (Diagnostic.missing_models(item.result())
-            #         if id(item) in warned else [])
 
             if empty:
                 issues.append((item, {"empty": empty, "warn": []}))
@@ -1396,23 +1546,6 @@ class Checklist(QWidget, Ui_quoteChecklist):
         btn_ok = box.addButton("输出吧", QMessageBox.ButtonRole.YesRole)
         box.exec()
         return box.clickedButton() is btn_ok
-
-    # def _show_auto_solution(self, issues):
-    #     """查看自动解决方案：QuoteChecker 读取 engine diagnostic，
-    #     按 problem_shooting.json 映射生成问题清单(按quote_id排列)并展示"""
-    #     results = [w.result() for w in self._iter_items()
-    #                if w.result() is not None]
-    #     problems = self._checker.check(results)
-    #
-    #     if not problems:
-    #         QMessageBox.information(
-    #             self, "自动解决方案",
-    #             "engine诊断中未发现可自动定位的问题；空值可能来自手动清空的"
-    #             "字段，请逐项检查清单。\n\n{}".format(self._format_issues(issues))
-    #         )
-    #         return
-    #
-    #     Checker.CheckerDialog(problems, parent=self).exec()
 
     def _on_lang_changed(self, text):
         """语言联动：英文版不提供现场服务选项——选英文时禁用服务复选框，
@@ -1500,6 +1633,16 @@ class Checklist(QWidget, Ui_quoteChecklist):
         if not chosen.lower().endswith(".xlsx"):
             chosen += ".xlsx"
 
+        # 项目快照路径：出单基线要写进它的「三、出单记录」（Commander 注入）
+        snapshot_path = ""
+        provider = self.snapshot_provider
+
+        if callable(provider):
+            try:
+                snapshot_path = provider() or ""
+            except Exception:      # 取不到只是这份单没有基线，不该拦住出单
+                snapshot_path = ""
+
         try:
             path = Writer.build_quote(
                 items, brand=title, out_path=chosen,
@@ -1507,9 +1650,15 @@ class Checklist(QWidget, Ui_quoteChecklist):
                 service=(self.serviceCheckBox_1.isChecked()
                          and lang == "zh"),
                 lang=lang,
+                snapshot_path=snapshot_path,
             )
         except Exception as err:
-            QMessageBox.critical(self, "输出报价", "报价单生成失败：{}".format(err))
+            # 最常见是目标文件正被 Excel 打开(系统报英文 Permission denied)，
+            # 补一句中文处置建议，避免弹窗只剩英文错误串
+            QMessageBox.critical(
+                self, "输出报价",
+                "报价单生成失败：{}\n\n若目标文件正在 Excel 中打开，"
+                "请关闭后重试；仍失败请换一个保存位置。".format(err))
             return
 
         message = "报价单已生成：\n{}".format(path)
@@ -1551,19 +1700,56 @@ class Checklist(QWidget, Ui_quoteChecklist):
                 params=(entry.get("parsed") or {}).get("data"),
             )
             self.checklistLayout.addWidget(item)
-            # Diagnostic 挂起：徽章挂接/评估停用，恢复时取消注释
-            # (原顺序说明：addWidget 重设父窗口会把 item 重新置隐，
-            #  必须先入容器再挂徽章，否则 badge.show() 的可见状态会在重父化时丢失)
-            # self._diagnostic.attach(item)
-            # self._diagnostic.evaluate(item)
 
+        self.mark_pending(entries)
         self._refresh_scroll_area()
 
-        # Diagnostic 挂起：选型数据缺失提示改在 CLI 输出
+        # 选型数据缺失提示：走 CLI，不驱动界面
         report = format_missing_models(results)
 
         if report:
             print("[Checklist] 选型数据缺失：\n{}".format(report))
+
+    def mark_pending(self, entries):
+        """把「用户没说、程序代为处理或留空」的字段汇总成一条红色待核对。
+
+        这些字段在对话阶段不再追问（非必须项），但不能静默通过：清单顶部
+        必须明确列出哪一条的哪一项是按默认填的，人工核对仍然留在 Checklist。
+        provenance 的 source 由 llm_chat 写入，Desk 手工路径与对话路径共用。
+        """
+
+        lines = []
+
+        for entry in (entries or []):
+            if not isinstance(entry, dict):
+                continue
+
+            provenance = entry.get("provenance")
+
+            if not isinstance(provenance, dict):
+                continue
+
+            names = [
+                _PENDING_LABELS.get(str(name), str(name))
+                for name, info in provenance.items()
+                if isinstance(info, dict)
+                and info.get("source") in _PENDING_SOURCES
+            ]
+
+            if names:
+                quote_id = (entry.get("quote_info") or {}).get("quote_id")
+                lines.append("条目 {}：{}".format(quote_id, "、".join(names)))
+
+        if not lines:
+            return
+
+        label = QLabel(
+            "以下字段用户未提供，已由程序按默认处理，请人工核对：\n"
+            + "\n".join(lines))
+        label.setWordWrap(True)
+        label.setStyleSheet(_PENDING_QSS)
+        label.setObjectName("pendingBanner")
+        self.checklistLayout.insertWidget(0, label)
 
     def load_snapshot(self, meta, items):
         """从快照恢复清单(「打开快照」)：items 为 Snapshot.parse_snapshot

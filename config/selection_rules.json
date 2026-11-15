@@ -8,7 +8,7 @@
   "brand": {
     "FAB": ["FAB", "Flintab", "富林泰博"],
     "FT": ["FT", "Flintec", "富林泰克"],
-    "AW": ["AW", "Ailiwei", "艾力威", "COPA A"]
+    "AW": ["AW", "Ailiwei", "COPA A"]
     }
   },
 
@@ -115,6 +115,46 @@
       "optimized_SF": 1.4,
       "reasoning": "物料重量/设备皮重占比低于30%，下调最优安全系数至1.4以优化称量精度。"
     }
+  },
+
+ "bench_sensor_rules": {
+   "_note": "台秤单点式传感器选型：防爆 -> 品牌+材质定系列fence -> 台面上限 -> 容量倍率区间取小档；overrides承载厂家常用配置(无法公式化的例外)",
+   "material_map": {
+     "C": "碳钢",
+     "HC": "碳钢",
+     "S": "不锈钢",
+     "HS": "不锈钢"
+   },
+   "family_fence": {
+     "FT": {
+       "碳钢": [
+         ["PC46", "PC42", "PC60"],
+         ["PC6", "PCB"]
+       ],
+       "不锈钢": [
+         ["PC6", "PCB"]
+       ]
+     },
+     "AW": {}
+   },
+  "capacity_ratio": {
+    "preferred_min": 1.5,
+    "tolerant_min": 1.3,
+    "max": 2.5,
+    "target": 2.0,
+    "reasoning": "1.3~2.5 为可用窗口；窗口内按倍率最接近 2.0 取档(距离相同取容量小的)，2.0 附近兼顾余量与成本。窗口内无解时放宽到 1.3 下限，再无可选时取最小可用档并标记 over/under。"
+  },
+   "deck_rule": "equivalent_side",
+   "overrides": [
+     {"brand": "FT", "material": "碳钢", "range": 3, "family": "PC42", "capacity": 10},
+     {"brand": "FT", "material": "碳钢", "range": 6, "family": "PC42", "capacity": 20},
+     {"brand": "FT", "material": "碳钢", "range": 12, "family": "PC42", "capacity": 30},
+     {"brand": "FT", "material": "碳钢", "range": 600, "family": "PC60", "capacity": 750},
+     {"brand": "FT", "material": "不锈钢", "range": 3, "family": "PC6", "capacity": 10},
+     {"brand": "FT", "material": "不锈钢", "range": 6, "family": "PC6", "capacity": 20},
+    {"brand": "FT", "material": "不锈钢", "range": 12, "family": "PC6", "capacity": 50},
+    {"brand": "FT", "material": "不锈钢", "range": 15, "family": "PC6", "capacity": 50}
+  ]
   },
 
  "SF_verification": {

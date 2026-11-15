@@ -15,7 +15,7 @@
   </property>
   <property name="windowIcon">
    <iconset>
-    <normaloff>../../../../COPAv2.ico</normaloff>../../../../COPAv2.ico</iconset>
+    <normaloff>../../../COPA/COPAv2.ico</normaloff>../../../COPA/COPAv2.ico</iconset>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>

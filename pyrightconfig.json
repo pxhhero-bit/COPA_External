@@ -1,0 +1,34 @@
+{
+    "include": [
+        "apps",
+        "engine",
+        "external",
+        "tools",
+        "tests",
+        "splash",
+        "main.py",
+        "launch.py",
+        "cli_quote.py"
+    ],
+    "exclude": [
+        "**/__pycache__",
+        "build",
+        "dist",
+        "temp",
+        "snapshot",
+        "output",
+        "data",
+        "template",
+        "library",
+        "manual",
+        "aidocs",
+        "external"
+    ],
+    "extraPaths": [
+        ".."
+    ],
+    "pythonVersion": "3.13",
+    "typeCheckingMode": "standard",
+    "reportMissingImports": "error",
+    "reportMissingTypeStubs": "none"
+}

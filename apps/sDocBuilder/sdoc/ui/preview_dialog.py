@@ -34,8 +34,9 @@ class PreviewDialog(QDialog, Ui_PreviewDialog):
             self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
             stats = QLabel(stats_text)
             lay = self.layout()
-            lay.insertWidget(0, stats)
-            lay.insertWidget(1, self._view, 1)
+            if isinstance(lay, QVBoxLayout):
+                lay.insertWidget(0, stats)
+                lay.insertWidget(1, self._view, 1)
             self.textBrowser.hide()
             # 关闭即释放 PDF 句柄：否则文件锁会让下一次 Word 导出偶发失败
             self.finished.connect(self._release_pdf)

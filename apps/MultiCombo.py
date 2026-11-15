@@ -6,8 +6,10 @@ GUI 结构化录入（Desk「下拉菜单输入」页签）需要一个下拉控
 （只读）同步显示已选摘要。Ui_*.py 由 .ui 的 customwidget header 指向
 本模块引用（uic 生成 from COPA.apps.MultiCombo import CheckableComboBox）。
 """
+from typing import Any, overload
+
 from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtGui import QIcon, QPixmap, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QComboBox
 
 
@@ -37,15 +39,38 @@ class CheckableComboBox(QComboBox):
         self._filter = _PopupEventFilter(self)
         self.view().viewport().installEventFilter(self._filter)
 
-    def addItem(self, text, userData=None):
+    @overload
+    def addItem(self, text: str, userData: Any = None) -> None: ...
+
+    @overload
+    def addItem(self, icon: QIcon | QPixmap, text: str,
+                userData: Any = None) -> None: ...
+
+    def addItem(self, *args: Any, **kwargs: Any) -> None:
         """追加一个可勾选条目（uic 生成代码调用 addItem("")+setItemText，
-        因此初始文本为空也要登记词条，文本随后经 setItemText 回填）"""
-        item = QStandardItem(text)
+        因此初始文本为空也要登记词条，文本随后经 setItemText 回填）
+
+        QComboBox 有两个重载：``addItem(text, userData)`` 与
+        ``addItem(icon, text, userData)``。子类重写得两个都认，否则静态检查
+        判「重写签名与父类不兼容」；而两套形参名互相冲突（第 1 位一个叫
+        text 一个叫 icon），实现侧只能用可变参数收，再按第 1 位是不是字符串
+        分派。走到图标形式时把图标丢掉——本控件条目只承载文本和勾选态。
+        """
+        first = args[0] if args else kwargs.get("text", "")
+
+        if isinstance(first, str):
+            label = first
+            data = args[1] if len(args) > 1 else kwargs.get("userData")
+        else:
+            label = args[1] if len(args) > 1 else kwargs.get("text", "")
+            data = args[2] if len(args) > 2 else kwargs.get("userData")
+
+        item = QStandardItem(label if isinstance(label, str) else str(label))
         item.setFlags(Qt.ItemFlag.ItemIsEnabled
                       | Qt.ItemFlag.ItemIsUserCheckable)
         item.setCheckState(Qt.CheckState.Unchecked)
-        if userData is not None:
-            item.setData(userData)
+        if data is not None:
+            item.setData(data)
         self._model.appendRow(item)
 
     def setItemText(self, index, text):

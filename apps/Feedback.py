@@ -27,8 +27,7 @@ from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QLineEdit,
                                QVBoxLayout)
 
 from COPA.apps import app_icon
-from COPA.apps.Diagnostic import format_diagnostics
-from COPA.apps.version import APP_VERSION
+from COPA.apps.version import version_text
 
 # 路径定位与 engine/Writer 同机制：打包后取 exe 旁，源码运行取项目根
 if getattr(sys, "frozen", False):
@@ -41,6 +40,84 @@ _OUTPUT_DIR = os.path.join(_ROOT_DIR, "output")
 
 # feedback.json 必备键：缺任一视为通道未配置，发送按钮置灰并提示
 _REQUIRED_KEYS = ("smtp_host", "sender", "auth_code", "receiver")
+
+
+# ---------------------------------------------------------------------------
+# engine 结果 -> 可读诊断文本（自 Diagnostic v1.0 迁入）
+# Diagnostic 已随 v1.6 退休，本函数是它唯一还被用到的部分：反馈数据包里要带
+# 选型诊断原文，方便复现问题。纯文本拼装，无 Qt 依赖。
+# ---------------------------------------------------------------------------
+
+def _walk_block(data, pad, lines):
+    for key, value in (data or {}).items():
+        if isinstance(value, dict):
+            lines.append("{}{}:".format(pad, key))
+            _walk_block(value, pad + "  ", lines)
+        elif isinstance(value, list):
+            lines.append("{}{}: [{} 项]".format(pad, key, len(value)))
+        else:
+            lines.append("{}{}: {}".format(pad, key, value))
+
+
+def _section(title, data):
+    lines = ["—— {} ——".format(title)]
+    _walk_block(data, "  ", lines)
+    return "\n".join(lines)
+
+
+def format_diagnostics(result):
+    """engine 结果 -> 可读诊断文本(选型信息 + 各业务 diagnostic 完整参数)"""
+    result = result or {}
+    quote_id = result.get("quote_id", "?")
+    lines = [
+        "条目 {} 诊断信息".format(quote_id),
+        "条目类型: {}    选型状态: {}".format(
+            result.get("item_type", "?"), result.get("status", "?")),
+        "",
+        "—— 选型信息 ——",
+    ]
+
+    if result.get("item_type") == "module":
+        combos = result.get("module") or []
+        lines += ["  传感器/模块组合: " + (
+            "; ".join("{} {} + {}-{}kg {}".format(
+                m["module"]["module模块型号"], m["module"]["mtl模块材质"],
+                m["sensor"]["family型号"], m["sensor"]["capacity容量"],
+                m["sensor"]["AC准确度等级"]) for m in combos) or "无匹配")]
+    else:
+        rows = result.get("platform") or result.get("bench") or []
+
+        def _row_model(r):
+            p = r.get("platform")          # 平台秤行嵌套，台秤行扁平
+            src = p or r
+            return "{} (量程{}kg 台面{})".format(
+                src.get("具体型号", "?"), src.get("量程", "?"),
+                src.get("台面尺寸", "?"))
+
+        lines += ["  型号: " + (
+            "; ".join(_row_model(r) for r in rows) or "无匹配")]
+
+    jbox = result.get("jbox")
+    lines += ["  接线盒: " + (jbox["model型号"] if jbox else "无匹配")]
+
+    controllers = result.get("controller") or []
+    lines += ["  仪表: " + (
+        "; ".join(c.get("详细型号", "?") for c in controllers) or "无匹配"), ""]
+
+    # diagnostic 参数块：字段名与 engine 生成结构一一对应
+    blocks = (
+        ("传感器选型诊断", (result.get("sensor") or {}).get("diagnostic")),
+        ("模块选型诊断", result.get("module_diagnostic")),
+        ("平台秤选型诊断", result.get("platform_diagnostic")),
+        ("台秤选型诊断", result.get("bench_diagnostic")),
+        ("仪表选型诊断", result.get("controller_diagnostic")),
+    )
+    lines += [s for s in (_section(t, d) for t, d in blocks) if len(s.splitlines()) > 1]
+
+    if result.get("status") == "ERROR":
+        lines += ["", "—— 错误 ——", "  {}".format(result.get("error", ""))]
+
+    return "\n".join(lines)
 
 
 def load_feedback_config():
@@ -138,7 +215,7 @@ def build_report(commander):
     lines = [
         "COPA 反馈数据包",
         "生成时间: {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-        "版本: {}".format(APP_VERSION),
+        "版本: {}".format(version_text()),
         "运行环境: Python {} / {}".format(
             platform.python_version(), platform.platform()),
         "打包环境: {}".format("是" if getattr(sys, "frozen", False) else "否"),
@@ -209,14 +286,14 @@ def _send_mail(config, desc, contact, report):
     receiver = (config.get("receiver") or "").strip()
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    subject = "【COPA反馈】{} {}".format(APP_VERSION, desc.splitlines()[0][:40])
+    subject = "【COPA反馈】{} {}".format(version_text(), desc.splitlines()[0][:40])
 
     body = [desc]
 
     if contact:
         body += ["", "联系方式：{}".format(contact)]
 
-    body += ["", "--", "由 COPA {} 自动发送".format(APP_VERSION)]
+    body += ["", "--", "由 COPA {} 自动发送".format(version_text())]
 
     msg = MIMEMultipart()
     # 主题先编码成 RFC2047 encoded-word 字符串再赋值：__setitem__ 形参

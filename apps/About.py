@@ -20,7 +20,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel,
                                QPushButton, QVBoxLayout)
 
-from COPA.apps.version import APP_RELEASE_DATE, APP_VERSION
+from COPA.apps.version import APP_RELEASE_DATE, version_text
 
 # 图标随 datas 进包：定位同 Manual——源码运行取项目根，打包后取
 # sys._MEIPASS(6.x 即 _internal)
@@ -84,7 +84,7 @@ class AboutDialog(QDialog):
         layout.addWidget(name_label)
 
         version_label = QLabel("版本 {}（{}）".format(
-            APP_VERSION, APP_RELEASE_DATE), self)
+            version_text(), APP_RELEASE_DATE), self)
         version_label.setStyleSheet("color: #666666;")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(version_label)

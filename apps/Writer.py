@@ -22,6 +22,7 @@ import math
 import os
 import re
 import sys
+import threading
 import unicodedata
 from copy import copy
 from datetime import datetime
@@ -79,10 +80,10 @@ _TEXT = {
         "plate_up": "Top adapting plate",
         "plate_down": "Base adapting plate",
         "platform": "Electronic platform scale",
-        "platform_ex": "Explosion-proof electronic platform scale",
+        "platform_ex": "Ex-proof electronic platform scale",
         "bench": "Electronic bench scale",
         "display": "Large display",
-        "display_ex": "Explosion-proof large display",
+        "display_ex": "Ex-proof large display",
         "pc": "pc",
         "m": "m",
         "plate": "pc",
@@ -92,6 +93,39 @@ _TEXT = {
         "ex_note": "Ex-proof environment.",
     },
 }
+
+
+# 出单落盘时要把基线写进哪个项目快照：由 build_quote 设进线程内上下文。
+# 底层有 5 处 _stamp_and_save 调用（单项目/多项目/整机/英文…），逐层加参数
+# 会把这条渲染链整个污染，而这里需要的只是一个「正在为哪个项目出单」的事实。
+_ORDER_CTX = threading.local()
+
+
+def _order_snapshot_path() -> str:
+    return getattr(_ORDER_CTX, "path", "")
+
+
+def _stamp_and_save(wb, out_path):
+    """落盘前盖内部项目号（A 列白字 1 号），并把出单基线写进项目快照。
+
+    项目号是批阅比对的钥匙：文件里只有号码，基线留在项目快照的
+    「三、出单记录」里。号码盖不上（合并格/只读）不影响出报价——只是这份单
+    第一次批阅时没有基线可比，退回「型号 vs 描述」比对。
+    """
+    code = ""
+    try:
+        from COPA.apps.audit import pno
+        code = pno.stamp(wb)
+    except Exception:                  # noqa: BLE001 任何异常都不能挡住出报价
+        code = ""
+    wb.properties.creator = "Z.ai"
+    wb.save(out_path)
+    if code:
+        try:
+            from COPA.apps.audit import pno
+            pno.save_state(out_path, code, _order_snapshot_path())
+        except Exception:              # noqa: BLE001
+            pass
 
 
 def _txt(lang, key):
@@ -161,8 +195,6 @@ def _read_csv(name):
 # 描述索引：三张品牌描述通表(品牌,型号family,详细型号,描述)统一装载，
 # 仪表/模块/手写秤体描述共用一个 型号->描述 索引(COPA B/COPA A报价均可能选用
 # FT/AW/FAB 器材，型号编码不冲突)。
-# 惰性加载约定(与 Parser._vocab 一致)：声明为空容器而非 None，配
-# _INDEXES_BUILT 构建标记——首次用到才读 CSV，静态类型不引入 Optional
 _DESC: dict = {}             # {norm型号: {"brand","family","model","desc","channels"}}
 _PLATFORMS: dict = {}        # {具体型号: row}  平台秤通表.csv(FT+AW合并属性表)
 _BENCHES: dict = {}          # {具体型号: row}  台秤通表.csv(FT+AW合并属性表)
@@ -502,23 +534,177 @@ def sensor_material(sensor_text):
     return raw
 
 
+# 台秤整机配套传感器：台秤通表无"可用传感器"列，改由 engine.select_bench_sensors
+# 按 防爆 -> 品牌+材质fence -> 台面上限 -> 容量倍率区间 现算(规则在
+# config/selection_rules.json 的 bench_sensor_rules)；本模块只负责取属性库、
+# 调规则、拼文案，不再维护"材质x量程x台面"的映射表。
+_BENCH_SENSOR_POOL: dict = {}      # {品牌: [engine 规范化传感器行]}
+
+
+def _bench_sensor_pool(brand):
+    """按品牌取单点式传感器属性库(engine 规范化行，含 EX_bool/最大台面尺寸)"""
+    brand = (brand or "").strip().upper() or "FT"
+
+    if brand not in _BENCH_SENSOR_POOL:
+        try:
+            from COPA.engine import engine as _engine
+
+            loader = _engine.DatabaseLoader(_engine.resolver.rules, brand)
+            _BENCH_SENSOR_POOL[brand] = loader.load_sensors()
+        except Exception:
+            _BENCH_SENSOR_POOL[brand] = []
+
+    return _BENCH_SENSOR_POOL[brand]
+
+
+def bench_sensor_pick(item):
+    """台秤 -> engine 选型结果(候选+默认)，无数据返回 None。
+
+    item["bench"] 为台秤通表型号；item["ex"] 为防爆需求；
+    item["sensor_pick"] 可覆盖默认选择(Checklist 下拉改选后回填
+    {"family": "PC60", "capacity": 100})。
+    """
+    row = lookup_bench_row(item.get("bench"))
+
+    if row is None:
+        return None
+
+    from COPA.engine import engine as _engine
+
+    bench_row = {
+        "品牌": (row.get("品牌") or "").strip().upper(),
+        "材质": (row.get("材质") or "").strip(),
+        "台面尺寸": (row.get("台面尺寸") or "").strip(),
+        "量程": (row.get("kg量程") or "").strip(),
+    }
+    pick = _engine.select_bench_sensors(
+        bench_row, _bench_sensor_pool(bench_row["品牌"]),
+        bool(item.get("ex")), _engine.resolver.rules)
+
+    chosen = item.get("sensor_pick") or {}
+
+    if chosen and pick.get("candidates"):
+        for candidate in pick["candidates"]:
+            if (candidate.get("family型号") == chosen.get("family")
+                    and str(candidate.get("capacity容量")) == str(chosen.get("capacity"))):
+                pick = dict(pick, default=candidate, SF=candidate.get("SF"),
+                            flag=candidate.get("flag"))
+                break
+
+    return pick
+
+
+def bench_sensor_text(item):
+    """台秤 -> 备注栏传感器文本(如 'PC60-100kg-C3 EX Y=7500')。
+
+    取 engine 选出的默认传感器；该品牌无单点式数据(如COPA A待补)时返回''，
+    由调用方留空备注——不编造型号。
+    """
+    pick = bench_sensor_pick(item)
+
+    if not pick or not pick.get("default"):
+        return ""
+
+    sensor = pick["default"]
+    family = (sensor.get("family型号") or "").strip()
+    size = str(sensor.get("capacity容量") or "").strip()
+
+    if not family or not size:
+        return ""
+
+    text = "{}-{}kg".format(family, size)
+    accuracy = (sensor.get("AC准确度等级") or "").strip()
+
+    if accuracy:
+        text += "-" + accuracy
+
+    if item.get("ex"):
+        text += " EX"
+
+    y_value = str(sensor.get("Y值") or "").strip()
+
+    if y_value:
+        text += " Y={}".format(y_value)
+
+    return text
+
+
 # 品牌 -> 整机描述里的品牌名
 _BRAND_NAMES = {"FT": "flintec", "AW": "alwe", "FAB": "flintab"}
 
-# 通表材质代码 -> 整机描述"1.材质："文案(平台秤/台秤共用)
-_SCALE_MTL_TEXT = {
-    "C": "碳钢，花纹钢台面", "HC": "碳钢，花纹钢台面",
+# 通表材质代码 -> 整机描述「1.材质：」文案。
+# 台秤（台秤通表：C/S/HC/HS）
+_SCALE_MTL_TEXT_BENCH = {
+    "C": "碳钢秤体，不锈钢拉丝面罩", "HC": "碳钢秤体，不锈钢拉丝面罩",
     "S": "全304不锈钢，拉丝面罩", "HS": "全304不锈钢，拉丝面罩",
-    "CS": "碳钢框架，不锈钢台面", "HCS": "碳钢框架，不锈钢台面",
 }
 
-# 上表 -> 英文(整机描述英文块用，措辞对齐阿根廷双语范例)
-_SCALE_MTL_TEXT_EN = {
-    "C": "carbon steel, tread plate deck", "HC": "carbon steel, tread plate deck",
-    "S": "full SS304 with brushed front panel", "HS": "full SS304 with brushed front panel",
-    "CS": "carbon steel frame with stainless steel deck",
-    "HCS": "carbon steel frame with stainless steel deck",
+# 平台秤（平台秤通表：C/S/CS + H 变体）。CS/HCS 为碳钢框架配不锈钢台面，
+# 台面工艺按不锈钢口径（喷砂/光面）；H 系列是 C/S 的变体，文案跟随。
+_SCALE_MTL_TEXT_PLATFORM = {
+    "C": "碳钢，花纹钢台面/光面板", "HC": "碳钢，花纹钢台面/光面板",
+    "S": "全不锈钢，台面喷砂/光面板", "HS": "全不锈钢，台面喷砂/光面板",
+    "CS": "秤体碳钢，台面不锈钢喷砂/光面板", "HCS": "秤体碳钢，台面不锈钢喷砂/光面板",
 }
+
+# 上表 -> 英文(整机描述英文块用，逐条对应中文口径)
+# 台秤：碳钢秤体/全304不锈钢 + 不锈钢拉丝面罩（cover brushed）
+_SCALE_MTL_TEXT_EN_BENCH = {
+    "C": "carbon steel body, stainless steel brushed cover",
+    "HC": "carbon steel body, stainless steel brushed cover",
+    "S": "full SS304 with brushed cover",
+    "HS": "full SS304 with brushed cover",
+    "CS": "carbon steel frame with stainless steel cover",
+    "HCS": "carbon steel frame with stainless steel cover",
+}
+
+# 平台秤：碳钢=花纹钢台面/光面；全不锈钢=台面喷砂/光面；混合=秤体碳钢+台面不锈钢喷砂/光面
+_SCALE_MTL_TEXT_EN_PLATFORM = {
+    "C": "carbon steel, tread plate deck / plain deck",
+    "HC": "carbon steel, tread plate deck / plain deck",
+    "S": "full stainless steel, sandblasted / plain deck",
+    "HS": "full stainless steel, sandblasted / plain deck",
+    "CS": "carbon steel frame, stainless steel deck sandblasted / plain",
+    "HCS": "carbon steel frame, stainless steel deck sandblasted / plain",
+}
+
+# 平台秤「4.传感器」一行：
+_HEADER_SENSOR_BRAND = {"COPA B": "flintec", "COPA A": "alwe"}
+
+_AW_PLATFORM_SENSOR_MTL = {
+    "C": "合金钢/不锈钢", "HC": "合金钢/不锈钢",
+    "S": "不锈钢", "HS": "不锈钢",
+    "CS": "不锈钢/合金钢", "HCS": "不锈钢/合金钢",
+}
+
+_AW_PLATFORM_SENSOR_MTL_EN = {
+    "C": "alloy steel / stainless steel", "HC": "alloy steel / stainless steel",
+    "S": "stainless steel", "HS": "stainless steel",
+    "CS": "stainless steel / alloy steel", "HCS": "stainless steel / alloy steel",
+}
+
+# 防爆等级：
+_SENSOR_EX_TEXT = {
+    "alwe": "Ex ia IIC T4 Ga；Ex ia ⅢC T200135℃ Da",
+    "flintec": "Ex ia IIC T6/T5 Ga Ex ia ⅢC T100℃ Da",
+}
+
+# COPA B(flintec) 平台秤传感器的防护等级
+# 未收录家族保留模板原文的三档列表，避免瞎猜。
+_FT_SENSOR_IP = {
+    "SLB": "IP67", "SB5": "IP67",
+    "SB14": "IP68（水深2m）/IP69K", "RC3": "IP68（水深2m）/IP69K",
+    "SB8": "IP68（水深2m）",
+}
+
+_FT_SENSOR_IP_EN = {
+    "SLB": "IP67", "SB5": "IP67",
+    "SB14": "IP68 (2 m water) / IP69K", "RC3": "IP68 (2 m water) / IP69K",
+    "SB8": "IP68 (2 m water)",
+}
+
+_FT_SENSOR_IP_FALLBACK = "IP67（SLB）/IP68（水深2m）/IP69K（SB14）"
+_FT_SENSOR_IP_FALLBACK_EN = "IP67 (SLB) / IP68 (2 m water) / IP69K (SB14)"
 
 
 def instrument_display_prefix(model):
@@ -559,7 +745,100 @@ def _scale_model_text(item):
     return "{}（{}）".format(row.get("型批型号") or "", model)
 
 
-def build_scale_desc(item, with_model=True, lang="zh"):
+def _sensor_brand(item, header_brand, row):
+    """传感器品牌：条目 m_brand 优先，其次通表品牌，最后报价抬头。
+
+    m_brand 是整单共用的秤体/传感器品牌短码（FT/AW），抬头本就由它推出。
+    实物品牌（通表 品牌/SLB 与 AWB 之分）排在抬头之前：COPA B抬头下若报的是
+    AW 秤，品牌与文案都必须跟 AW 走，不能因为抬头是COPA B就一律写 flintec。
+    """
+    raw = str((item or {}).get("m_brand") or "").strip().upper()
+    code = _BRAND_NAMES.get(raw, "")
+
+    if code:
+        return code
+
+    code = _BRAND_NAMES.get((row.get("品牌") or "").strip().upper(), "")
+
+    if code:
+        return code
+
+    return _HEADER_SENSOR_BRAND.get((header_brand or "").strip(), "")
+
+
+def _platform_sensor_spec(item, header_brand, row, sensor, ex, lang="zh"):
+    """平台秤「4.…传感器*4（这里）」的括号内文案：品牌按 m_brand/抬头分两套，
+    COPA B那套的防护等级再按传感器家族取一档。"""
+    brand = _sensor_brand(item, header_brand, row)
+    mtl_code = (row.get("材质") or "").strip()
+
+    if brand == "flintec":
+        spec = _ft_sensor_spec(sensor, lang)
+    else:
+        table = (_AW_PLATFORM_SENSOR_MTL_EN if lang == "en"
+                 else _AW_PLATFORM_SENSOR_MTL)
+        mtl = table.get(mtl_code)
+
+        if not mtl:
+            # 通表未收录的材质：退回传感器自身材质，不替客户拼组合
+            mtl = sensor_material(sensor)
+
+            if lang == "en":
+                mtl = {"不锈钢": "stainless steel",
+                       "合金钢": "alloy steel"}.get(mtl, mtl)
+
+        spec = ("material: {}".format(mtl) if lang == "en"
+                else "材质：{}".format(mtl))
+
+    if ex:
+        grade = _SENSOR_EX_TEXT.get(brand) or _SENSOR_EX_TEXT["flintec"]
+        spec = "{}{}{}".format(spec, ", ex-proof rating: " if lang == "en"
+                               else "，防爆等级：", grade)
+
+    return spec
+
+
+def _ft_sensor_spec(sensor, lang="zh"):
+    """COPA B(flintec) 平台秤传感器说明：材质固定 17-4PH，防护等级按家族取一档。"""
+    family = (sensor or "").split("-")[0].strip().upper()
+    table = _FT_SENSOR_IP_EN if lang == "en" else _FT_SENSOR_IP
+    fallback = (_FT_SENSOR_IP_FALLBACK_EN if lang == "en"
+                else _FT_SENSOR_IP_FALLBACK)
+    ip = table.get(family) or fallback
+
+    if lang == "en":
+        return ("imported, material: 17-4PH stainless steel, "
+                "protection class: {}".format(ip))
+
+    return "传感器原装进口，材质：17-4PH不锈钢，防护等级：{}".format(ip)
+
+
+def _split_brand_suffix(text):
+    """描述末尾自带的「；品牌：xxx」摘出来 -> (描述, 品牌)。
+
+    描述通表个别条目把品牌写进了描述正文；仪表行的品牌要落在括号外，
+    不摘出来会被一起包进「（仪表描述）」里。
+    """
+    hit = re.search(r"[；;]?\s*(?:品牌|brand)\s*[：:]\s*([^；;，,]*?)\s*$",
+                    text or "", re.IGNORECASE)
+
+    if hit is None:
+        return text or "", ""
+
+    return text[:hit.start()].rstrip("；;，, "), hit.group(1).strip()
+
+
+def _indicator_label(controller):
+    """仪表型号标签：FT-230（FT230NA002B）；查不到 family 时不重复写两遍"""
+    prefix = instrument_display_prefix(controller)
+
+    if prefix and prefix != controller:
+        return "{}（{}）".format(prefix, controller)
+
+    return controller
+
+
+def build_scale_desc(item, with_model=True, lang="zh", header_brand=""):
     """平台秤/台秤整机多行描述(对齐真实报价单的编号式写法)。
 
     with_model=True(COPA A多项目/内容块模板)：首行"型号：型批型号（具体型号）"；
@@ -568,6 +847,10 @@ def build_scale_desc(item, with_model=True, lang="zh"):
     平台秤：1材质/2台面规格/3量程(分度值e=d)/4传感器*4/5接线盒*1/
             6仪表*1/7信号电缆5米/备注行
     台秤：  [防爆行]/1材质/2台面尺寸/3量程(e=d)/4传感器*1/5仪表*1/备注行
+
+    header_brand 为报价抬头("COPA B"/"COPA A")：平台秤第 4 行的材质/防护等级/
+    防爆等级按抬头分两套写法(COPA B=flintec、COPA A=alwe)，见模板
+    ref/02 COPA B报价/平台秤 与 ref/01 COPA A报价/平台秤。缺省时按通表品牌回落。
 
     lang=en 时输出 中文整块\\n英文整块(参照阿根廷双语范例)，英文材料/
     术语取自阿根廷语料；通表属性(量程/台面/材质)数值保持原样。
@@ -579,11 +862,9 @@ def build_scale_desc(item, with_model=True, lang="zh"):
     ex = bool(item.get("ex"))
 
     def _en_mtl(mtl):
-        return _SCALE_MTL_TEXT_EN.get(mtl, mtl)
-
-    def _en_sensor(text):
-        return {"不锈钢": "stainless steel", "合金钢": "alloy steel"}.get(
-            text, text)
+        table = (_SCALE_MTL_TEXT_EN_PLATFORM if p_type == "platform"
+                 else _SCALE_MTL_TEXT_EN_BENCH)
+        return table.get(mtl, mtl)
 
     if row is None:
         # 通表无行(手输型号) -> 退化为简单型号行，保住可报价性
@@ -593,7 +874,7 @@ def build_scale_desc(item, with_model=True, lang="zh"):
         en = "Model: {}\nRemarks:".format(model) if with_model else "Remarks:"
         return "{}\n{}".format(zh, en)
 
-    # ---- 中文块(维持既有措辞) ----
+    # ---- 中文块 ----
     zh_lines = ["型号：{}".format(_scale_model_text(item))] if with_model else []
 
     if ex and p_type == "bench":
@@ -603,8 +884,11 @@ def build_scale_desc(item, with_model=True, lang="zh"):
 
     size = str(row.get("台面尺寸") or "").replace("x", "*").replace("X", "*")
     cap = row.get("kg量程") or ""
-    zh_lines.append("1.材质：{}；".format(_SCALE_MTL_TEXT.get(
-        (row.get("材质") or "").strip(), row.get("材质") or "")))
+    # 材质文案按机型取
+    mtl_code = (row.get("材质") or "").strip()
+    mtl_table = (_SCALE_MTL_TEXT_PLATFORM if p_type == "platform"
+                 else _SCALE_MTL_TEXT_BENCH)
+    zh_lines.append("1.材质：{}；".format(mtl_table.get(mtl_code, mtl_code)))
     zh_lines.append("2.台面{}：{}mm；".format(
         "规格" if p_type == "platform" else "尺寸", size))
 
@@ -613,23 +897,37 @@ def build_scale_desc(item, with_model=True, lang="zh"):
         zh_lines.append("3.量程：{}kg，分度值e=d={}kg，精度等级C3；".format(
             cap, _num(row.get("kg分度值"))))
     else:
-        zh_lines.append("3.量程：{}kg，分度值e=d={}kg，精度等级C3；".format(
-            cap, _num(float(row.get("g分度值") or 0) / 1000)))
+        # 台秤分度值以 g 计(与真实台秤单据一致，如 0.5g/2g/10g)，
+        # 不折算成 kg；精度等级口径不变，特殊要求人工手改
+        zh_lines.append("3.量程：{}kg，分度值e=d={}g，精度等级C3；".format(
+            cap, _num(row.get("g分度值"))))
 
     brand = _BRAND_NAMES.get((row.get("品牌") or "").strip(), "")
+    # 传感器品牌：平台秤按条目 m_brand 映射（COPA B抬头下也可能报 AW 秤）
+    sensor_brand = (_sensor_brand(item, header_brand, row)
+                    if p_type == "platform" else brand)
+
+    # 接线盒只对平台秤有意义，先落空串：下面英文块另起一个 p_type 判断，
+    # 静态检查不会把两个分支当成同一条件，不预置会报「可能未赋值」。
+    jbox = ""
+    jbrand = ""
 
     if p_type == "platform":
         sensors = (row.get("可用传感器") or "").split("|")
         sensor = sensors[0].strip() if sensors else ""
-        zh_lines.append("4.称重传感器{}*4（材质：{}）；品牌：{}".format(
-            sensor, sensor_material(sensor), brand))
+        # 括号内的材质/防护/防爆等级按品牌分两套写法（COPA B flintec / COPA A alwe）
+        zh_lines.append("4.{}传感器{}*4（{}）；品牌：{}".format(
+            "防爆" if ex else "称重", sensor,
+            _platform_sensor_spec(item, header_brand, row, sensor, ex),
+            sensor_brand))
         jbox = item.get("jbox") or ""
         jbrand = _BRAND_NAMES.get(
             (_JBOXES.get(_norm(jbox)) or {}).get("品牌", ""), "") if jbox else ""
         zh_lines.append("5.接线盒{}*1；品牌：{}".format(jbox, jbrand))
         ctrl_idx = 6
     else:
-        zh_lines.append("4.{}传感器*1；品牌：{}".format("防爆" if ex else "", brand))
+        zh_lines.append("4.{}传感器*1；品牌：{}".format(
+            "防爆" if ex else "称重", brand))
         ctrl_idx = 5
 
     controller = item.get("controller") or ""
@@ -637,15 +935,21 @@ def build_scale_desc(item, with_model=True, lang="zh"):
     desc = (info or {}).get("desc", "")
     install = item.get("controller_install") or ""
     cbrand = _BRAND_NAMES.get((info or {}).get("brand", ""), "")
+    desc, tail_brand = _split_brand_suffix(desc)
+    cbrand = cbrand or tail_brand
     detail = install + desc
-    # 描述通表文本已自带"；品牌：xxx"结尾时不再追加，避免品牌重复输出
-    suffix = "" if "品牌：" in detail else (
-        "；品牌：{}".format(cbrand) if cbrand else "")
-    zh_lines.append("{}.{}仪表{}({})*1；{}{}".format(
-        ctrl_idx, "防爆" if ex else "称重",
-        instrument_display_prefix(controller), controller,
-        detail, suffix,
-    ))
+    # 对齐模板「x.称重仪表XX*1（仪表描述、安装方式）；品牌：」：
+    # 型号用全角括号，描述整段进括号，品牌落在括号外
+    line = "{}.{}仪表{}*1".format(
+        ctrl_idx, "防爆" if ex else "称重", _indicator_label(controller))
+
+    if detail:
+        line += "（{}）".format(detail)
+
+    if cbrand:
+        line += "；品牌：{}".format(cbrand)
+
+    zh_lines.append(line)
 
     if p_type == "platform":
         zh_lines.append("7.信号电缆5米。")
@@ -664,10 +968,11 @@ def build_scale_desc(item, with_model=True, lang="zh"):
         en_lines.append("Model: {}".format(en_model_text))
 
     if ex and p_type == "bench":
-        en_lines.append("Explosion-proof bench scale")
+        en_lines.append("Ex-proof bench scale")
 
     mtl = (row.get("材质") or "").strip()
     en_lines.append("1. Material: {};".format(_en_mtl(mtl)))
+    # 台面行中英都统一成「台面规格/尺寸 -> Deck size」，不再区分平台秤与台秤
     en_lines.append("2. Deck size: {}mm;".format(size))
     if p_type == "platform":
         en_lines.append(
@@ -675,28 +980,36 @@ def build_scale_desc(item, with_model=True, lang="zh"):
                 cap, _num(row.get("kg分度值"))))
     else:
         en_lines.append(
-            "3. Capacity: {}kg, certified interval e=d={}kg, accuracy class C3;".format(
-                cap, _num(float(row.get("g分度值") or 0) / 1000)))
+            "3. Capacity: {}kg, certified interval e=d={}g, accuracy class C3;".format(
+                cap, _num(row.get("g分度值"))))
 
     if p_type == "platform":
         sensors = (row.get("可用传感器") or "").split("|")
         sensor = sensors[0].strip() if sensors else ""
-        en_lines.append("4. Load cells {}*4 (material: {}); Brand: {}".format(
-            sensor, _en_sensor(sensor_material(sensor)), brand))
+        # 与中文「4.称重传感器/防爆传感器」同口径：普通 Load cells、防爆加 Ex-proof
+        en_lines.append("4. {} {}*4 ({}); Brand: {}".format(
+            "Ex-proof load cells" if ex else "Load cells", sensor,
+            _platform_sensor_spec(item, header_brand, row, sensor, ex,
+                                  lang="en"), sensor_brand))
         en_lines.append("5. Junction box {}*1; Brand: {}".format(jbox, jbrand))
     else:
-        en_lines.append("4. {}load cell*1; Brand: {}".format(
-            "Explosion-proof " if ex else "", brand))
+        en_lines.append("4. {}*1; Brand: {}".format(
+            "Ex-proof load cell" if ex else "Load cell", brand))
 
-    desc_en = lookup_desc_en(controller)
-    en_detail = desc_en
-    if en_detail and cbrand and "brand:" not in en_detail.lower():
-        en_detail = "{}; Brand: {}".format(en_detail, cbrand)
-    ctrl_kind = "Explosion-proof " if ex else "Weighing "
-    en_lines.append("{}. {}indicator {}({})*1; {}".format(
+    desc_en, en_tail_brand = _split_brand_suffix(lookup_desc_en(controller))
+    ctrl_kind = "Ex-proof " if ex else "Weighing "
+    en_line = "{}. {}indicator {}*1".format(
         ctrl_idx, ctrl_kind,
-        instrument_display_prefix(controller), controller, en_detail,
-    ))
+        _indicator_label(controller).replace("（", "(").replace("）", ")"))
+
+    if desc_en:
+        en_line += " ({})".format(desc_en)
+
+    if cbrand or en_tail_brand:
+        if "brand:" not in desc_en.lower():
+            en_line += "; Brand: {}".format(cbrand or en_tail_brand)
+
+    en_lines.append(en_line)
 
     if p_type == "platform":
         en_lines.append("7. Signal cable 5 m.")
@@ -709,24 +1022,61 @@ def build_scale_desc(item, with_model=True, lang="zh"):
 # 项目 -> 明细行模型  row: (名称/型号文本, 单位, 数量|None, 描述)
 # ---------------------------------------------------------------------------
 
+def _controller_label(controller_model, lang="zh"):
+    """仪表型号标签：与整机描述第 6 行同口径「系列（具体型号）」。
+
+    COPA B模块模板 B 列写的就是「称重显示控制器\\nFAB330（具体型号）」——型号列
+    给系列、括号里给具体型号，而不是只写一串具体型号。英文模板用半角括号。
+    """
+    label = _indicator_label(controller_model)
+
+    if lang == "en":
+        return label.replace("（", "(").replace("）", ")")
+
+    return label
+
+
+def _controller_desc(controller_model, install=None, lang="zh"):
+    """仪表描述：与整机描述第 6 行同口径——描述整段在后，品牌落在末尾括号外。
+
+    通表描述自带「；品牌：alwe」的（AW-220）把品牌摘出来，不重复写。
+    """
+    info = lookup_instrument(controller_model) or {}
+    body, tail_brand = _split_brand_suffix(info.get("desc") or "")
+    brand = _BRAND_NAMES.get(info.get("brand") or "", "") or tail_brand
+    zh_desc = (install or "") + body
+
+    if brand:
+        zh_desc = "{}；品牌：{}".format(zh_desc, brand)
+
+    en_desc = (lookup_desc_en(controller_model) or "").strip()
+
+    if lang == "en" and en_desc and brand and "brand:" not in en_desc.lower():
+        en_desc = "{}; Brand: {}".format(en_desc, brand)
+
+    return _desc_bi(lang, zh_desc, en_desc)
+
+
 def _controller_row(controller_model, install=None, lang="zh"):
-    """返回 (名称, 型号, 单位, 数量, 描述)；多通道仪表返回 (None, channels)
-    由调用方汇总到底部。install 为支架安装前缀(立杆安装/壁挂安装)时插入描述开头。"""
+    """返回 (名称, 型号, 单位, 数量, 描述, 备注)；多通道仪表返回 (None, channels)
+    由调用方汇总到底部。install 为支架安装前缀(立杆安装/壁挂安装)时插入描述开头。
+
+    型号列与描述写法对齐模板／平台秤那套：系列（具体型号）+ 描述 + 品牌。
+    """
     info = lookup_instrument(controller_model)
-    desc_en = lookup_desc_en(controller_model)
 
     if info is None:
         return (_name_text(lang, "controller"), controller_model,
-                _unit_text(lang, "pc"), 1, ""), 1
+                _unit_text(lang, "pc"), 1, "", ""), 1
 
     name = _name_text(lang, "controller")
 
     if info["channels"] > 1:
         return None, info["channels"]
 
-    zh_desc = install + info["desc"] if install else info["desc"]
-    return (name, controller_model, _unit_text(lang, "pc"), 1,
-            _desc_bi(lang, zh_desc, desc_en)), 1
+    return (name, _controller_label(controller_model, lang),
+            _unit_text(lang, "pc"), 1,
+            _controller_desc(controller_model, install, lang), ""), 1
 
 
 def _guess_brand(item):
@@ -1010,12 +1360,16 @@ def _module_plate_model(module_spec):
     return "{} {}".format(material, rating)
 
 
-def build_item_rows(item, scale_model_in_name=False, lang="zh"):
+def build_item_rows(item, scale_model_in_name=False, lang="zh",
+                    header_brand=""):
     """单个项目 -> (明细行列表, 底部追加的多通道仪表 {model: 累计套数})。
-    行: (名称, 型号, 单位, 数量, 描述)；lang=en 时名称为"英文\\n中文"、
+    行: (名称, 型号, 单位, 数量, 描述, 备注)；lang=en 时名称为"英文\\n中文"、
     单位为"英文\\n中文"、描述为"中文在上英文下"(描述EN 缺失回退中文)。
+    备注列仅单据模板(单项目/内容块)有承载位；台秤把配套传感器型号+Y值
+    写这里(整机描述只写"传感器*1")，其余行留空。
     scale_model_in_name=True(COPA B多项目模板 B=名称/型号)：型号由调用方并入
-    名称列，描述不含型号行；否则型号由调用方并入描述首行(COPA A多项目/内容块)。"""
+    名称列，描述不含型号行；否则型号由调用方并入描述首行(COPA A多项目/内容块)。
+    header_brand 透传给整机描述：平台秤第 4 行按报价抬头分两套文案。"""
     rows, tail_channels = [], {}
     p_type = item["type"]
     qty = item.get("qty") or 1
@@ -1037,17 +1391,17 @@ def build_item_rows(item, scale_model_in_name=False, lang="zh"):
         model, desc = item.get("module") or (None, "")
         rows.append((_name_text(lang, "module"), model or "",
                      _unit_text(lang, "pc"), support,
-                     _desc_bi(lang, desc, lookup_desc_en(model))))
+                     _desc_bi(lang, desc, lookup_desc_en(model)), ""))
         jbox = item.get("jbox")
         rows.append((_name_text(lang, "jbox"), jbox or "",
                      _unit_text(lang, "pc"), 1,
                      _desc_bi(lang, lookup_accessory(jbox),
-                              lookup_desc_en(jbox))))
+                              lookup_desc_en(jbox)), ""))
         # 单/多通道仪表按模板行序放在接线盒之后
         _append_controller(rows, tail_channels, item, qty, lang)
         rows.append((_name_text(lang, "cable"), cable,
                      _unit_text(lang, "m"), cable_qty,
-                     _desc_bi(lang, cable_desc, lookup_desc_en(cable))))
+                     _desc_bi(lang, cable_desc, lookup_desc_en(cable)), ""))
         # 过渡板按附件选择输出(上/下型号描述相同，行首标明方向)；
         # 型号随模块材质与传感器系列/容量解析
         accessories = item.get("accessories") or []
@@ -1062,11 +1416,11 @@ def build_item_rows(item, scale_model_in_name=False, lang="zh"):
                 rows.append((_name_text(lang, key), plate,
                              _unit_text(lang, "plate"), support,
                              _desc_bi(lang, lookup_desc(plate),
-                                      lookup_desc_en(plate))))
+                                      lookup_desc_en(plate)), ""))
             else:
                 rows.append((_name_text(lang, key), "",
                              _unit_text(lang, "plate"), support,
-                             lookup_accessory("过渡板")))
+                             lookup_accessory("过渡板"), ""))
     elif p_type == "platform":
         # 整机名称：防爆平台秤为 防爆电子平台秤(B列名称)；整机描述自带
         # 型号行(with_model=True)时型号不再单独落型号列
@@ -1075,14 +1429,20 @@ def build_item_rows(item, scale_model_in_name=False, lang="zh"):
         model = "" if with_model else _scale_model_text(item)
         rows.append((_name_text(lang, base), model,
                      _unit_text(lang, "scale_unit"), qty,
-                     build_scale_desc(item, with_model=with_model, lang=lang)))
+                     build_scale_desc(item, with_model=with_model,
+                                      lang=lang,
+                                      header_brand=header_brand),
+                     ""))
     elif p_type == "bench":
         base = "bench"
         with_model = not scale_model_in_name
         model = "" if with_model else _scale_model_text(item)
         rows.append((_name_text(lang, base), model,
                      _unit_text(lang, "scale_unit"), qty,
-                     build_scale_desc(item, with_model=with_model, lang=lang)))
+                     build_scale_desc(item, with_model=with_model,
+                                      lang=lang,
+                                      header_brand=header_brand),
+                     bench_sensor_text(item)))
 
     # 大屏幕：附件选型确认的具体型号(Checklist display 字段)落行为只数1
     display = item.get("display")
@@ -1092,7 +1452,7 @@ def build_item_rows(item, scale_model_in_name=False, lang="zh"):
                 else _name_text(lang, "display"))
         rows.append((name, display, _unit_text(lang, "pc"), 1,
                      _desc_bi(lang, lookup_desc(display),
-                              lookup_desc_en(display))))
+                              lookup_desc_en(display)), ""))
 
     return rows, tail_channels
 
@@ -1184,16 +1544,29 @@ def _stamp_company_contact(ws, items):
 
 
 def _write_single(items, out_path, service=False, lang="zh"):
-    """COPA B单项目报价模板：明细区 13-19 行(7行)，其后为服务费行(仅中文模板含)
-    与价税合计行。现行业务最大 6 行明细(+1 多通道底部行)，无需插行，避免
-    openpyxl 行增删不迁移公式/合并单元格的问题；未用行清空。
-    服务费/价税合计行按内容锚点定位(模板备注区/汇总区可自由增删)。"""
+    """COPA B单项目报价模板：明细区 13 行起按实际明细行数动态重建。
+
+    模板原 13-19 为 7 行明细占位、20 为服务费行(仅中文模板含)、21 为价税合计、
+    其后为备注区。openpyxl 插删行不迁移公式与合并单元格，故先快照 13 行起全部
+    原型(值/样式/行高/合并)再整体重写：明细行逐条复制 13 行原型，服务费行随
+    开关写入或跳过，价税合计重映射 SUM/大写公式的行号，备注区逐行搬运并下移。
+    条目数不再受限(原实现硬卡 7 行明细)。"""
     tpl = os.path.join(TEMPLATE_DIR, _tpl_name("COPA B单项目报价模板.xlsx", lang))
     wb = load_workbook(tpl)
     ws = wb.worksheets[0]
     _stamp_date(ws)
     _stamp_company_contact(ws, items)
-    rows, tail = build_item_rows(items[0], lang=lang)
+    # 单项目模板承载全部条目：秤类多项目按明细行逐条扩展(不切多项目模板)
+    rows, tail = [], {}
+
+    for item in items:
+        item_rows, item_tail = build_item_rows(
+            item, lang=lang, header_brand="COPA B")
+        rows.extend(item_rows)
+
+        for model, sets in item_tail.items():
+            tail[model] = tail.get(model, 0) + sets
+
     # 多通道仪表 -> 从项目删去，底部统一追加：数量 = ceil(spinbox ÷ 通道数)
     tail_rows = []
 
@@ -1205,53 +1578,87 @@ def _write_single(items, out_path, service=False, lang="zh"):
             _unit_text(lang, "pc"),
             math.ceil(sets / channels),
             _desc_bi(lang, info["desc"] if info else "",
-                     lookup_desc_en(model)),
+                     lookup_desc_en(model)), "",
         ))
 
     all_rows = rows + tail_rows
-    proto = _capture_row(ws, 13, 1, 8)
+    # 明细区原型快照：13 明细 / 服务费(zh 有、en 无) / 价税合计 / 备注区
+    protos, merge_by_row = _rebuild_area(ws, 13)
+    P_ITEM = protos[13]
+    r_serve_src = next((r for r in protos
+                        if str(protos[r]["cells"].get(2, (None,))[0] or ""
+                               ).startswith(("服务费", "Service Fee"))),
+                       None)
+    r_total_src = next(r for r in protos
+                       if str(protos[r]["cells"].get(1, (None,))[0] or ""
+                              ).startswith(("价税合计", "Total")))
+    P_TOTAL = protos[r_total_src]
 
-    if len(all_rows) > 7:
-        raise ValueError("单项目明细超过7行({}行)，请改用多项目模板或精简项目".format(len(all_rows)))
+    row = 13
 
-    for i in range(7):
-        r = 13 + i
+    for name, model, unit, qty, desc, remark in all_rows:
+        spec = "\n".join(x for x in (model, desc) if x)
+        _write_row(ws, row, P_ITEM, {
+            1: "=ROW()-12",        # 序号
+            2: name,               # 名称
+            3: spec,               # 型号规格、描述
+            4: unit, 5: qty, 7: "=E{0}*F{0}".format(row),
+            8: remark or None,     # 备注(台秤传感器型号)
+        })
+        row += 1
 
-        if i < len(all_rows):
-            name, model, unit, qty, desc = all_rows[i]
-            spec = "\n".join(x for x in (model, desc) if x)
-            _write_row(ws, r, proto, {
-                1: "=ROW()-12",        # 序号
-                2: name,               # 名称
-                3: spec,               # 型号规格、描述
-                4: unit, 5: qty, 7: "=E{0}*F{0}".format(r),
-            })
-        else:
-            _write_row(ws, r, proto, {1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None})
+    last_detail = row - 1
+    # 服务费：开 -> 保留模板占位行(数量1/次)，只重映射序号与总价公式；
+    # 关 -> 整行不写(后续合计与备注区随之上移)；en 模板本就无此行
+    r_serve = None
 
-    # 服务费/价税合计行按内容定位：zh 模板含服务费行(现场服务开=保留占位，
-    # 关=整行清空并收缩合计公式)；en 模板无服务费行，开关不改变输出结构
-    r_serve = next((r for r in range(13, ws.max_row + 1)
-                    if str(ws.cell(row=r, column=2).value or "").startswith("服务费")),
-                   None)
-    r_total = next((r for r in range(13, ws.max_row + 1)
-                    if str(ws.cell(row=r, column=1).value or "").startswith(
-                        ("价税合计", "Total"))),
-                   None)
+    if service and r_serve_src is not None:
+        r_serve = row
+        _write_row(ws, r_serve, protos[r_serve_src], {
+            1: "=ROW()-12", 7: "=E{0}*F{0}".format(r_serve),
+        })
 
-    if r_serve is not None and not service:
-        _write_row(ws, r_serve, proto,
-                   {1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None})
+        for c1, c2 in merge_by_row.get(r_serve_src, []):
+            ws.merge_cells(start_row=r_serve, start_column=c1,
+                           end_row=r_serve, end_column=c2)
 
-        if r_total is not None:
-            _set_cell(ws, r_total, 7, "=SUM(G13:G19)")
-
-    if service and r_serve is None:
+        row += 1
+    elif service:
         print("[Writer] {}：模板无服务费行，现场服务开关未生效".format(
             os.path.basename(out_path)))
 
-    wb.properties.creator = "Z.ai"
-    wb.save(out_path)
+    # 价税合计：SUM 范围取实际明细(含服务费行)，大写公式内引用行号同步改写
+    r_total = row
+    cap_formula = str(P_TOTAL["cells"][3][0] or "").replace(
+        "G{}".format(r_total_src), "G{}".format(r_total))
+    _write_row(ws, r_total, P_TOTAL, {
+        3: cap_formula, 7: "=SUM(G13:G{})".format(r_serve or last_detail),
+    })
+
+    for c1, c2 in merge_by_row.get(r_total_src, []):
+        ws.merge_cells(start_row=r_total, start_column=c1,
+                       end_row=r_total, end_column=c2)
+
+    # 备注区(价税合计之后)逐行搬运：无值且无合并的尾部空行不写入
+    row = r_total + 1
+
+    for src in range(r_total_src + 1, max(protos) + 1):
+        snap = protos[src]
+        has_value = any(value is not None
+                        for value, _style in snap["cells"].values())
+
+        if not has_value and not merge_by_row.get(src):
+            continue
+
+        _write_row(ws, row, snap, {})
+
+        for c1, c2 in merge_by_row.get(src, []):
+            ws.merge_cells(start_row=row, start_column=c1,
+                           end_row=row, end_column=c2)
+
+        row += 1
+
+    _stamp_and_save(wb, out_path)
 
 
 def _write_multi(items, out_path, service=False, lang="zh"):
@@ -1299,6 +1706,7 @@ def _write_multi(items, out_path, service=False, lang="zh"):
     for idx, item in enumerate(items):
         # COPA B多项目模板 B=名称/型号：秤业务型号并入名称列(描述去型号行)
         rows, tail = build_item_rows(item, scale_model_in_name=True,
+                                     header_brand="COPA B",
                                      lang=lang)
 
         for model, sets in tail.items():
@@ -1313,9 +1721,9 @@ def _write_multi(items, out_path, service=False, lang="zh"):
         })
         ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=7)
 
-        for i, (name, model, unit, qty, desc) in enumerate(rows):
+        for i, (name, model, unit, qty, desc, _remark) in enumerate(rows):
             r = first_item + i
-            # COPA B多项目模板 B=名称/型号：型号行并入名称格
+            # COPA B多项目模板 B=名称/型号：型号行并入名称格(无备注列)
             combined = "\n".join(x for x in (name, model) if x)
             _write_row(ws, r, P_ITEM, {
                 1: i + 1, 2: combined, 3: unit, 4: qty, 7: desc,
@@ -1423,8 +1831,7 @@ def _write_multi(items, out_path, service=False, lang="zh"):
 
         row += 1
 
-    wb.properties.creator = "Z.ai"
-    wb.save(out_path)
+    _stamp_and_save(wb, out_path)
 
 
 # ---------------------------------------------------------------------------
@@ -1464,7 +1871,7 @@ def _tail_rows(tail_total, lang="zh"):
             _unit_text(lang, "pc"),
             math.ceil(sets / channels),
             _desc_bi(lang, info["desc"] if info else "",
-                     lookup_desc_en(model)),
+                     lookup_desc_en(model)), "",
         ))
 
     return result
@@ -1479,7 +1886,17 @@ def _write_aw_single(items, out_path, service=False, lang="zh"):
     ws = wb.worksheets[0]
     _stamp_date(ws)
     _stamp_company_contact(ws, items)
-    rows, tail = build_item_rows(items[0], lang=lang)
+    # 单项目模板承载全部条目(秤类多项目逐行扩展，不切多项目模板)
+    rows, tail = [], {}
+
+    for item in items:
+        item_rows, item_tail = build_item_rows(
+            item, lang=lang, header_brand="COPA A")
+        rows.extend(item_rows)
+
+        for model, sets in item_tail.items():
+            tail[model] = tail.get(model, 0) + sets
+
     all_rows = rows + _tail_rows(tail, lang)
 
     protos, merge_by_row = _rebuild_area(ws, 12)
@@ -1495,11 +1912,12 @@ def _write_aw_single(items, out_path, service=False, lang="zh"):
 
     row = 12
 
-    for name, model, unit, qty, desc in all_rows:
+    for name, model, unit, qty, desc, remark in all_rows:
         spec = "\n".join(x for x in (model, desc) if x)
         _write_row(ws, row, P_ITEM, {
             1: "=ROW()-11", 2: name, 3: spec,
             5: unit, 6: qty, 8: "=F{0}*G{0}".format(row),
+            9: remark or None,      # 备注(台秤传感器型号)
         })
         ws.merge_cells(start_row=row, start_column=3, end_row=row, end_column=4)
         row += 1
@@ -1546,8 +1964,7 @@ def _write_aw_single(items, out_path, service=False, lang="zh"):
 
         row += 1
 
-    wb.properties.creator = "Z.ai"
-    wb.save(out_path)
+    _stamp_and_save(wb, out_path)
 
 
 def _write_aw_multi(items, out_path, service=False, lang="zh"):
@@ -1577,7 +1994,7 @@ def _write_aw_multi(items, out_path, service=False, lang="zh"):
     tail_total = {}
 
     for idx, item in enumerate(items):
-        rows, tail = build_item_rows(item, lang=lang)
+        rows, tail = build_item_rows(item, lang=lang, header_brand="COPA A")
 
         for model, sets in tail.items():
             tail_total[model] = tail_total.get(model, 0) + sets
@@ -1592,7 +2009,7 @@ def _write_aw_multi(items, out_path, service=False, lang="zh"):
         })
         ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=9)
 
-        for i, (name, model, unit, qty, desc) in enumerate(rows):
+        for i, (name, model, unit, qty, desc, _remark) in enumerate(rows):
             r = first_item + i
             spec = "\n".join(x for x in (model, desc) if x)
             _write_row(ws, r, P_ITEM, {
@@ -1701,8 +2118,7 @@ def _write_aw_multi(items, out_path, service=False, lang="zh"):
 
         row += 1
 
-    wb.properties.creator = "Z.ai"
-    wb.save(out_path)
+    _stamp_and_save(wb, out_path)
 
 
 _WRITERS = {
@@ -1745,9 +2161,13 @@ def _capture_block(block_ws, max_col=8):
 
 
 def _write_scale_single(items, out_path, brand, service=False, lang="zh"):
-    """平台秤/台秤单项目报价：品牌底板(公司抬头) + 业务内容块模板拼装。
+    """平台秤/台秤报价(单项目模板)：品牌底板(公司抬头) + 业务内容块模板拼装。
     底板表头行(序号/No.)以下整体清空，内容块(整机行/服务费/价税合计/备注)按
-    块内相对位置重写到表头行起，公式引用按目标行号重生成。"""
+    块内相对位置重写到表头行起，公式引用按目标行号重生成。
+
+    单项目模板按条目数扩展：多条整机会复制整机明细行，服务费/价税合计/说明区
+    整体下移(秤类多项目即走此路径，不切多项目分项段模板)。首条条目决定内容块
+    版式(台秤/平台秤)，混合品种时以首条为准。"""
     item = items[0]
     brand_base = _tpl_name(_SCALE_BASE_TPL[brand], lang)
     block_name = _tpl_name(_SCALE_BLOCK_TPL[item["type"]], lang)
@@ -1788,12 +2208,16 @@ def _write_scale_single(items, out_path, brand, service=False, lang="zh"):
     serve_src = next((i + 1 for i, row in enumerate(block_rows[:total_src - 1])
                       if _is_serve_row(row)), None)
 
+    P_HEADER = block_rows[0]
+    P_DETAIL = block_rows[1]                    # 整机明细原型(块内第2行)
+    P_SERVE = block_rows[serve_src - 1] if serve_src else None
+    P_TOTAL = block_rows[total_src - 1]
+    P_NOTES = block_rows[total_src:]            # 价税合计之后的说明区
     target = header_row
 
-    for i, snap in enumerate(block_rows):
-        if (not service) and serve_src and (i + 1 == serve_src):
-            continue          # 服务费行整行跳过(后续行自动上移)
-
+    def _put(snap):
+        """内容块行原型 -> 当前目标行；返回写入行号(行高/样式/合并一并搬运)"""
+        nonlocal target
         r = target
         ws.row_dimensions[r].height = snap["height"]
 
@@ -1806,50 +2230,61 @@ def _write_scale_single(items, out_path, brand, service=False, lang="zh"):
             ws.merge_cells(start_row=r, start_column=c1, end_row=r, end_column=c2)
 
         target += 1
+        return r
 
-    # 填整机行(块内第2行)：名称/描述/单位/数量；序号与总价公式按目标行重生成
-    r_detail = header_row + 1
-    name, model, unit, qty, desc = build_item_rows(item, lang=lang)[0][0]
-    _set_cell(ws, r_detail, 2, name)
-    _set_cell(ws, r_detail, 3, desc)
-    _set_cell(ws, r_detail, 4, unit)
-    _set_cell(ws, r_detail, 5, qty)
-    _set_cell(ws, r_detail, 1, "=ROW()-{}".format(header_row))
-    _set_cell(ws, r_detail, 7, "=E{0}*F{0}".format(r_detail))
+    _put(P_HEADER)
 
-    r_serve = (header_row + serve_src - 1) if (serve_src and service) else None
+    # 整机明细行：每条整机一行(单项目模板按条目数扩展，服务费/合计/说明随之下移)；
+    # 备注列(8)写台秤配套传感器型号+Y值，平台秤与其它器材留空
+    detail_rows = []
 
-    if r_serve:
+    for item in items:
+        r = _put(P_DETAIL)
+        name, model, unit, qty, desc, remark = build_item_rows(
+            item, lang=lang, header_brand=brand)[0][0]
+        _set_cell(ws, r, 1, "=ROW()-{}".format(header_row))
+        _set_cell(ws, r, 2, name)
+        _set_cell(ws, r, 3, desc)
+        _set_cell(ws, r, 4, unit)
+        _set_cell(ws, r, 5, qty)
+        _set_cell(ws, r, 6, None)
+        _set_cell(ws, r, 7, "=E{0}*F{0}".format(r))
+        _set_cell(ws, r, 8, remark or None)
+        detail_rows.append(r)
+
+    r_serve = None
+
+    if service and P_SERVE is not None:
+        r_serve = _put(P_SERVE)
         _set_cell(ws, r_serve, 1, "=ROW()-{}".format(header_row))
         _set_cell(ws, r_serve, 7, "=E{0}*F{0}".format(r_serve))
 
-    # 价税合计：SUM范围/大写公式引用按目标行号改写(跳过服务费行时合计行上移)
-    r_total = header_row + total_src - 1 - (1 if (serve_src and not service) else 0)
+    # 价税合计：SUM范围/大写公式引用按目标行号改写(服务费行随开关增减)
+    r_total = _put(P_TOTAL)
     _set_cell(ws, r_total, 7, "=SUM(G{}:G{})".format(
-        r_detail, r_serve or r_detail))
+        detail_rows[0], r_serve or detail_rows[-1]))
     cap = str(ws.cell(row=r_total, column=3).value or "")
 
     if cap:
         _set_cell(ws, r_total, 3, re.sub(
             r"G\d+", "G{}".format(r_total), cap))
 
-    base.properties.creator = "Z.ai"
-    base.save(out_path)
+    for snap in P_NOTES:
+        _put(snap)
+
+    _stamp_and_save(base, out_path)
 
 
 def _use_multi_template(items):
-    """多项目模板判定：quote_id 最大>1；或模块业务选用多通道仪表——
-    即便单项目报价，多通道仪表也需独立分项段输出，强制走多项目模板"""
-    if max(p["quote_id"] for p in items) > 1:
-        return True
+    """多项目模板判定：仅「称重模块 + 多项目」使用多项目分项段模板。
 
-    if len(items) == 1 and items[0].get("type") == "module":
-        info = lookup_instrument(items[0].get("controller"))
+    平台秤/台秤等整机多项目改用单项目模板逐行扩展(真实整机单据形态)；
+    单项目模块(含多通道仪表)同样走单项目模板，仪表由底部汇总行承载。
+    """
+    if max(p["quote_id"] for p in items) <= 1:
+        return False
 
-        if info is not None and info["channels"] > 1:
-            return True
-
-    return False
+    return any(p.get("type") == "module" for p in items)
 
 
 def suggest_path(items, brand, lang="zh"):
@@ -1865,11 +2300,14 @@ def suggest_path(items, brand, lang="zh"):
 
 
 def build_quote(items, brand="COPA B", out_path=None, out_dir=None,
-                service=False, lang="zh"):
+                service=False, lang="zh", snapshot_path=""):
     """入口：items 为 Checklist 采集的结构化条目列表，brand 为报价抬头，
     lang 为输出语言("zh"中文/"en"英文，英文走 *_英文版 模板与英文文案)。
     quote_id 最大值 > 1 判为多项目报价。out_path 指定保存文件(保存对话框确认值)，
-    缺省时按 out_dir(默认 output/) 自动命名。返回输出文件路径。"""
+    缺省时按 out_dir(默认 output/) 自动命名。返回输出文件路径。
+
+    snapshot_path 为项目快照(.md)：报价成功后把这一单的型号/数量基线追加到
+    它的「三、出单记录」，批阅时据此判人工改动；为空则这份单不留基线。"""
     if not items:
         raise ValueError("无可输出的条目")
 
@@ -1887,12 +2325,18 @@ def build_quote(items, brand="COPA B", out_path=None, out_dir=None,
         if parent:
             os.makedirs(parent, exist_ok=True)
 
-    # 单项目且为秤业务 -> 整机单行制(真实单据格式，品牌底板+内容块模板)
-    if (len(items) == 1 and max(p["quote_id"] for p in items) <= 1
-            and items[0].get("type") in _SCALE_BLOCK_TPL):
-        _write_scale_single(items, out_path, brand, service, lang)
-        return out_path
+    # 出单期间告诉底层「基线写进哪个项目快照」；finally 必须清掉，否则下一张
+    # 没传 snapshot_path 的单会误写进上一个项目的快照里。
+    _ORDER_CTX.path = snapshot_path or ""
 
-    _WRITERS[brand][1 if _use_multi_template(items) else 0](
-        items, out_path, service, lang)
-    return out_path
+    try:
+        # 纯整机业务(平台秤/台秤，含多项目) -> 单项目模板 + 内容块逐行扩展
+        if all(p.get("type") in _SCALE_BLOCK_TPL for p in items):
+            _write_scale_single(items, out_path, brand, service, lang)
+            return out_path
+
+        _WRITERS[brand][1 if _use_multi_template(items) else 0](
+            items, out_path, service, lang)
+        return out_path
+    finally:
+        _ORDER_CTX.path = ""

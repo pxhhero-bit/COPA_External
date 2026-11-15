@@ -2,8 +2,6 @@
 import os
 import sys
 
-from PySide6.QtGui import QIcon
-
 _ICON_NAME = "COPAv2.ico"
 _ICON = None
 
@@ -22,5 +20,9 @@ def app_icon():
     """全窗口共享的 COPA 图标(模块级缓存单例)"""
     global _ICON
     if _ICON is None:
+        # Keep the package importable by headless callers (contract/CLI).  Qt is
+        # only needed when a window actually requests the application icon.
+        from PySide6.QtGui import QIcon
+
         _ICON = QIcon(app_icon_path())
     return _ICON

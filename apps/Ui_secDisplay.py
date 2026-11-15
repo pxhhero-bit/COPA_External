@@ -112,7 +112,7 @@ class Ui_secDisplay(object):
     def retranslateUi(self, secDisplay):
         secDisplay.setWindowTitle(QCoreApplication.translate("secDisplay", u"\u5927\u5c4f\u5e55\u9009\u578b", None))
         self.brandComBox.setItemText(0, QCoreApplication.translate("secDisplay", u"FT (\u5bcc\u6797\u6cf0\u514b)", None))
-        self.brandComBox.setItemText(1, QCoreApplication.translate("secDisplay", u"AW (\u827e\u529b\u5a01)", None))
+        self.brandComBox.setItemText(1, QCoreApplication.translate("secDisplay", u"AW (COPA A)", None))
 
         self.label.setText(QCoreApplication.translate("secDisplay", u"\u54c1\u724c", None))
         self.sizeComBox.setItemText(0, QCoreApplication.translate("secDisplay", u"3", None))

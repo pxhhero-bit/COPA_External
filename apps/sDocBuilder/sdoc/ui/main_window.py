@@ -390,9 +390,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox.warning(self, "打开快照",
                                 "快照中没有可用的选型条目。")
             return
-        if hasattr(self.store, "match_entry"):
+        match_entry = getattr(self.store, "match_entry", None)
+        if callable(match_entry):
             for e in project.entries:
-                e.families = self.store.match_entry(e)
+                e.families = match_entry(e)
         self.project = project
         self.editProjectName.setText(project.project_id)
         self.editCustomerName.setText(project.company)

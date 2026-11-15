@@ -1,0 +1,163 @@
+{
+  "active": "provider6",
+  "providers": {
+    "provider": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "recursive/flint-v1.0:free",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "supports_response_format": true,
+      "api_key": "API_key",
+      "extra": {
+        "reasoning": {
+          "enabled": true
+        }
+      },
+      "timeout": 300,
+      "max_attempts": 2,
+      "ui": {
+        "order": 6,
+        "label": "Flint v1.0",
+        "intro": "Recursive的免费推理模型，40B参数；单轮回复约 30 秒到 2 分钟"
+      }
+    },
+    "provider2": {
+      "base_url": "https://router.shengsuanyun.com/api/v1",
+      "model": "agnes/agnes-2.5-flash",
+      "api_key_env": "SHENGSUANYUN_API_KEY",
+      "supports_response_format": true,
+      "api_key": "API_key",
+      "extra": {
+        "reasoning": {
+          "type": "enabled"
+        }
+      },
+      "timeout": 120,
+      "max_attempts": 5,
+      "ui": {
+        "order": 2,
+        "label": "Agnes 2.5 Flash",
+        "intro": "Agnes旗下模型，免费版；每分钟约 1 次调用，被限流时会自动退避重试。"
+      }
+    },
+    "provider3": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "liquid/lfm-3-1.7b:free",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "supports_response_format": true,
+      "api_key": "API_key",
+      "extra": {
+        "reasoning": {
+          "enabled": true
+        }
+      },
+      "timeout": 120,
+      "max_attempts": 4,
+      "ui": {
+        "order": 5,
+        "label": "LFM3-1.7B",
+        "intro": "LiquidAI旗下免费模型。"
+      }
+    },
+    "provider4": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "particle-ai/particle-1:free",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "supports_response_format": true,
+      "api_key": "API_key",
+      "extra": {
+        "reasoning": {
+          "enabled": true
+        }
+      },
+      "timeout": 120,
+      "max_attempts": 4,
+      "ui": {
+        "order": 4,
+        "label": "Particle-1",
+        "intro": "基于DS v4.1f的免费模型。"
+      }
+    },
+    "provider5": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "supports_response_format": true,
+      "api_key": "API_key",
+      "extra": {
+        "reasoning": {
+          "enabled": true
+        }
+      },
+      "timeout": 350,
+      "max_attempts": 2,
+      "ui": {
+        "order": 7,
+        "label": "Nemotron 3.5 Lightning",
+        "intro": "英伟达旗下免费模型，但速度较慢"
+      }
+    },
+    "provider6": {
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "model": "glm-4.7-flash",
+      "api_key_env": "ZHIPU_API_KEY",
+      "supports_response_format": true,
+      "api_key": "API_key",
+      "extra": {
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "ui": {
+        "order": 1,
+        "label": "GLM-4.7 Flash",
+        "intro": "免费文本模型，响应快，但可能排队"
+      }
+    },
+    "provider7": {
+      "base_url": "https://aiping.cn/api/v1",
+      "model": "Qwen3.5-4B",
+      "api_key_env": "AIPING_API_KEY",
+      "supports_response_format": true,
+      "api_key": "API_key",
+      "extra": {
+        "extra_body": {
+          "enable_thinking": true,
+          "provider": {
+            "only": [
+              "硅基流动"
+            ],
+            "allow_fallbacks": false
+          }
+        }
+      },
+      "timeout": 180,
+      "max_attempts": 2,
+      "ui": {
+        "order": 3,
+        "label": "千问3.5-4B",
+        "intro": "阿里云模型，4B参数，免费版。"
+      }
+    },
+    "provider8": {
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "model": "glm-4.6v-flash",
+      "api_key_env": "ZHIPU_API_KEY",
+      "supports_response_format": false,
+      "api_key": "API_key",
+      "ui": {
+        "hidden": true
+      }
+    },
+    "provider9": {
+      "base_url": "http://127.0.0.1:11434/v1",
+      "model": "qwen3:14b",
+      "api_key_env": null,
+      "supports_response_format": true,
+      "ui": {
+        "hidden": true,
+        "label": "本地模型",
+        "intro": "本机 Ollama 兼容端点 · 需要本地服务已启动"
+      }
+    }
+  }
+}

@@ -8,8 +8,6 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-import os
-
 from PySide6.QtCore import (QCoreApplication, QDate, QDateTime, QLocale,
     QMetaObject, QObject, QPoint, QRect,
     QSize, QTime, QUrl, Qt)
@@ -26,12 +24,7 @@ class Ui_PreviewDialog(object):
             PreviewDialog.setObjectName(u"PreviewDialog")
         PreviewDialog.resize(760, 640)
         icon = QIcon()
-        # 窗口图标按本文件位置定位包根的 COPAv2.ico（sdoc/ui 上四级），
-        # 不依赖工作目录；Designer 相对路径在任意启动目录下都会失效
-        _ICON_PATH = os.path.normpath(os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..", "..", "..", "..", "COPAv2.ico"))
-        icon.addFile(_ICON_PATH, QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        icon.addFile(u"../../../COPA/COPAv2.ico", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         PreviewDialog.setWindowIcon(icon)
         self.verticalLayout = QVBoxLayout(PreviewDialog)
         self.verticalLayout.setObjectName(u"verticalLayout")

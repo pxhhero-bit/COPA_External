@@ -6,6 +6,7 @@ Designer 里编辑的是同尺寸的 QTreeWidget 基类，行为全部在本模�
 """
 import json
 import re
+from collections.abc import Callable
 
 from PySide6.QtCore import QMimeData, Qt
 from PySide6.QtGui import QColor, QDrag, QPainter, QPen
@@ -14,9 +15,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QMenu, QStyledItemDelegate,
                                QTreeWidgetItem)
 
 MIME_REF = "application/x-sdoc-ref"
-ROLE_KIND = Qt.UserRole            # "BLOCK" 标记块节点
-ROLE_REF = Qt.UserRole + 1         # 块引用
-ROLE_TITLE = Qt.UserRole + 2       # 节点原始标题（编号前缀之外）
+ROLE_KIND = Qt.ItemDataRole.UserRole            # "BLOCK" 标记块节点
+ROLE_REF = Qt.ItemDataRole.UserRole + 1         # 块引用
+ROLE_TITLE = Qt.ItemDataRole.UserRole + 2       # 节点原始标题（编号前缀之外）
 
 GUIDE_COLOR = QColor("#c9ced4")    # 树形分支引导线
 
@@ -162,14 +163,14 @@ class PoolPanel(QTreeWidget):
         entries = getattr(project, "entries", []) if project else []
         for cat, fams in store.categories():
             top = QTreeWidgetItem([cat])
-            top.setFlags(top.flags() & ~Qt.ItemIsDragEnabled)
+            top.setFlags(top.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
             self.addTopLevelItem(top)
             for f in fams:
                 add_family_item(top, f)
         if entries:
             # 快照分组置顶：全库折叠，仅展开本项目设备（命中库块）
             top = QTreeWidgetItem(["本项目设备（来自快照）"])
-            top.setFlags(top.flags() & ~Qt.ItemIsDragEnabled)
+            top.setFlags(top.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
             self.insertTopLevelItem(0, top)
             for e in entries:
                 e_item = QTreeWidgetItem([e.type_cn])
@@ -181,10 +182,14 @@ class PoolPanel(QTreeWidget):
             self.collapseAll()
             top.setExpanded(True)
             for i in range(top.childCount()):
-                top.child(i).setExpanded(True)
+                child = top.child(i)
+                if child is not None:
+                    child.setExpanded(True)
         else:
             for i in range(self.topLevelItemCount()):
-                self.topLevelItem(i).setExpanded(True)
+                root = self.topLevelItem(i)
+                if root is not None:
+                    root.setExpanded(True)
 
     def startDrag(self, allowed_actions):
         # 型号行（无 ROLE_REF）整体拖动 = 其下全部块；叶子块拖动 = 单块
@@ -205,7 +210,7 @@ class PoolPanel(QTreeWidget):
                      .encode("utf-8"))
         drag = QDrag(self)
         drag.setMimeData(mime)
-        drag.exec(Qt.CopyAction)
+        drag.exec(Qt.DropAction.CopyAction)
 
     @staticmethod
     def _title_of(leaf):
@@ -228,16 +233,16 @@ class OutlinePanel(QTreeWidget):
         self.setItemDelegate(OutlineDelegate(self))
         self.setAcceptDrops(True)
         self.setDragDropMode(QTreeWidget.DragDropMode.DragDrop)
-        self.setDefaultDropAction(Qt.MoveAction)
+        self.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.setDropIndicatorShown(True)
         self.setIndentation(24)
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._menu)
         self.itemChanged.connect(self._on_renamed)
         self.itemDoubleClicked.connect(self._on_double_clicked)
         self.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
-        self.mutate_hook = None            # 变更前快照回调（撤回历史用）
-        self.report_hook = None            # 消息回调（状态栏提示）
+        self.mutate_hook: Callable[[], None] | None = None   # 变更前快照回调（撤回历史用）
+        self.report_hook: Callable[[str], None] | None = None  # 消息回调（状态栏提示）
         self._numbering = False
 
     def _report(self, msg):
@@ -276,7 +281,7 @@ class OutlinePanel(QTreeWidget):
         # Del 删除选中节点；重命名编辑中把按键交还编辑器
         # （PySide6 6.11 的 state() 返回普通枚举，用相等比较判断编辑态）
         editing = self.state() == QAbstractItemView.State.EditingState
-        if event.key() == Qt.Key_Delete and not editing:
+        if event.key() == Qt.Key.Key_Delete and not editing:
             it = self.currentItem()
             if it is not None:
                 self._delete(it)
@@ -287,7 +292,7 @@ class OutlinePanel(QTreeWidget):
 
     def add_chapter(self, title, parent_item=None):
         it = QTreeWidgetItem([title])
-        it.setFlags(it.flags() | Qt.ItemIsEditable)
+        it.setFlags(it.flags() | Qt.ItemFlag.ItemIsEditable)
         it.setData(0, ROLE_TITLE, title)
         if parent_item is None:
             self.addTopLevelItem(it)
@@ -301,7 +306,7 @@ class OutlinePanel(QTreeWidget):
         text = title if title.startswith("［") \
             else "［{}］{}".format(_kind_of(ref), title)
         it = QTreeWidgetItem([text])
-        it.setFlags((it.flags() | Qt.ItemIsEditable) & ~Qt.ItemIsDropEnabled)
+        it.setFlags((it.flags() | Qt.ItemFlag.ItemIsEditable) & ~Qt.ItemFlag.ItemIsDropEnabled)
         it.setData(0, ROLE_KIND, "BLOCK")
         it.setData(0, ROLE_REF, ref)
         it.setData(0, ROLE_TITLE, text)
@@ -403,6 +408,8 @@ class OutlinePanel(QTreeWidget):
 
         for i in range(self.topLevelItemCount()):
             it = self.topLevelItem(i)
+            if it is None:
+                continue
             it.setText(0, "{} {}".format(i + 1, self._raw_title(it)))
             if it.data(0, ROLE_KIND) != "BLOCK":
                 num(it, str(i + 1))
@@ -488,6 +495,8 @@ class OutlinePanel(QTreeWidget):
             return "「{}」前面没有兄弟章节，无法降级".format(self._raw_title(it))
         prev = (parent.child(idx - 1) if parent is not None
                 else self.topLevelItem(idx - 1))
+        if prev is None:
+            return "找不到相邻章节，无法降级"
         if prev.data(0, ROLE_KIND) == "BLOCK":
             return "前一个节点是内容块，只能降级到章节之下"
         prev_depth = self._depth_of(prev)

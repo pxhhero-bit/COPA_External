@@ -20,7 +20,17 @@ _DATA_DIR = os.path.join(_ROOT_DIR, "data")
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９．", "0123456789.")
 
 _NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
-_SIZE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*[xX×*]\s*(\d+(?:\.\d+)?)")
+# 尺寸：数字[单位] x 数字[单位]。单位(mm/cm/m/毫米/厘米/米)可省、可只写一侧，
+# 覆盖 "1500*1500" / "1.5m×1.5m" / "1.5米x1.5米" / "30x40cm" 等写法；
+# 分组：(长)(长单位)(宽)(宽单位)，单位原样保留给 size_to_mm 换算
+_SIZE_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(mm|cm|m|毫米|厘米|米)?"
+    r"\s*[xX×*]\s*"
+    r"(\d+(?:\.\d+)?)\s*(mm|cm|m|毫米|厘米|米)?",
+    re.IGNORECASE,
+)
+# 无单位时的米制判定阈值：两维都小于该值即按「米」理解(通表库口径为 mm)
+_SIZE_METER_THRESHOLD = 10
 # 值token：连续拉丁字母数字(含+-)或连续汉字，用于品牌/材质等文本值
 _TOKEN_RE = re.compile(r"[A-Za-z0-9+\-]+|[\u4e00-\u9fff]+")
 
@@ -45,6 +55,59 @@ _NEVER_MATCH_RE = re.compile(r"(?!x)x")
 # 尺寸口语小数："1米2"x"1米5" = 1.2x1.5(米+分米口语表达)，匹配前归一为小数
 _SIZE_COLLOQUIAL_RE = re.compile(r"(\d)米(\d)")
 
+# 重量类参数的中文名：取值失败时拼成「量程不能为负数」这类可直接读的提示
+_WEIGHT_PARAM_CN = {
+    "W1": "重量",
+    "W2": "皮重",
+    "W_total": "总重",
+    "r_input": "量程",
+    "e_input": "分度值",
+}
+
+# 负号(半角/全角/长音/减号)：量程写负数属录入手误，必须拒绝而不能按绝对值算
+_MINUS_MARKS = "-－﹣−"
+# 紧凑尺寸：紧跟尺寸用语的纯数字(台面3040/台面300400)，按右侧对半拆分；
+# 拆出的尺寸是否真实存在不在此判定，交 engine 的台面尺寸筛选裁决。
+# 至少四位才当紧凑尺寸(三位数常见于"304不锈钢"这类材质写法，不能吞)
+_COMPACT_SIZE_HEAD_RE = re.compile(r"^[\s:：=]*(\d{4,})(?![\dA-Za-z.])")
+_COMPACT_SIZE_TAIL_RE = re.compile(r"(?<![\dA-Za-z.])(\d{4,})\s*$")
+
+
+def _negated_at(text, pos):
+    """pos 处的数值是否带负号：左邻 '-' 系符号，且再左邻不是字母数字
+    (排除 FTBR-C-030 这类型号连字符，型号里的 030 不是负数)"""
+    if pos <= 0 or text[pos - 1] not in _MINUS_MARKS:
+        return False
+
+    if pos >= 2 and text[pos - 2].isascii() and text[pos - 2].isalnum():
+        return False
+
+    return True
+
+
+def compact_size_to_mm(digits):
+    """紧凑尺寸数字 -> '长x宽'(mm)，拆不开时返回 None
+
+    从右侧对半拆(右侧是宽度，末位数字保持完整)：'3040' -> 30|40，
+    '300400' -> 300|400。两半都小于 100 时按 cm 理解('3040' -> 300x400)，
+    否则按 mm('300400' -> 300x400)。
+
+    解析层不判断"这个台面存不存在"——'30000400' 拆成 3000|400 后由 engine
+    的台面尺寸筛选拒掉(并回报该档可选尺寸)，避免这里写死位数规则把合法
+    写法也拒了；奇数位无法对半拆，按缺参处理。
+    """
+    if len(digits) < 3 or len(digits) % 2:
+        return None
+
+    half = len(digits) // 2
+    length, width = int(digits[:half]), int(digits[half:])
+
+    if length <= 0 or width <= 0:
+        return None
+
+    scale = 10 if max(length, width) < 100 else 1
+    return "{}x{}".format(length * scale, width * scale)
+
 # text 取值两端可剥离的语气助词(全局filler已废除，仅保留取值边界的最小清理)
 _TEXT_TRIM_CHARS = "的哈吧呢啊哦嗯了"
 
@@ -53,6 +116,50 @@ def _num(value):
     """浮点结果尽量收敛为整数(3400.0 -> 3400)，便于与 Engine 的 int 容量字段对齐"""
     rounded = round(value, 6)
     return int(rounded) if float(rounded).is_integer() else rounded
+
+
+def _dimension_mm(value, unit):
+    """单维尺寸 -> mm：显式单位优先(30x40cm -> 300x400)，无单位时按米制
+    数值特征判定(1.5 -> 1500，1500 -> 1500)"""
+    unit = (unit or "").strip().lower()
+
+    if unit in ("cm", "厘米"):
+        return value * 10
+
+    if unit in ("m", "米"):
+        return value * 1000
+
+    if unit in ("mm", "毫米"):
+        return value
+
+    return value * 1000 if value < _SIZE_METER_THRESHOLD else value
+
+
+def size_to_mm(text):
+    """台面尺寸归一到通表库口径(mm)：'1.5x1.5'/'1.5m×1.5m' -> '1500x1500'。
+
+    显式单位按单位换算，无单位时按米制数值特征判定(米制输入不会到两位数)；
+    已是 mm 的输入原样保留；无法识别时返回原值(交上层按缺参/不匹配处理)。
+    非字符串(如结构化 [长, 宽] 序列)按原样返回，由调用方决定是否处理。
+    """
+    if not isinstance(text, str):
+        return text
+
+    m = _SIZE_RE.search(text)
+
+    if m is None:
+        return text
+
+    unit1, unit2 = m.group(2), m.group(4)
+    # 单位只写了一侧时按同一单位理解("30x40cm" = 30cm x 40cm)
+    if unit1 and not unit2:
+        unit2 = unit1
+    elif unit2 and not unit1:
+        unit1 = unit2
+
+    length = _dimension_mm(float(m.group(1)), unit1)
+    width = _dimension_mm(float(m.group(3)), unit2)
+    return "{}x{}".format(_num(length), _num(width))
 
 
 class Parser:
@@ -71,6 +178,9 @@ class Parser:
 
         self.parameters = self.rules["parameters"]
         self._negation_marks = tuple(self.rules.get("negation_marks", []))
+        # 本次取值的具体失败原因(如「量程不能为负数」)：extract_value 每次
+        # 进入时清空，_parse_fragment 在取值为空时用它代替泛化文案
+        self._last_reason = None
         self._chinese_numerals = self.rules.get("chinese_numerals", {})
         # 中文数字字符类按 chinese_numerals 动态构建，表内加字(如 双)即生效
         self._chinese_num_re = re.compile(
@@ -410,6 +520,7 @@ class Parser:
         ptype = param_def["type"]
         prefix = cleaned[:match.start()]
         suffix = cleaned[match.end():]
+        self._last_reason = None
 
         if ptype == "flag":
             # 命名即 True；业务用语前紧邻否定词(不带搅拌/无需检定)视为 False
@@ -424,8 +535,21 @@ class Parser:
                 value = self._weight_in(suffix, unit_table)
             if value is None:
                 value = self._weight_in(prefix, unit_table, prefer_last=True)
+
+            name = _WEIGHT_PARAM_CN.get(param_id, "数值")
+
+            # 失败原因写成人话：只说哪一项不对，不给写法示例
             if value is None or value <= 0:
+                if value is None:
+                    what = "未识别到{}".format(name)
+                elif value < 0:
+                    what = "{}不能为负数".format(name)
+                else:
+                    what = "{}必须大于 0".format(name)
+
+                self._last_reason = what
                 return None
+
             return (_num(value), {"unit": "kg"})
 
         if ptype == "integer":
@@ -492,8 +616,30 @@ class Parser:
                 m = _SIZE_RE.search(_SIZE_COLLOQUIAL_RE.sub(r"\1.\2", cleaned))
 
             if not m:
+                # 紧凑写法：只认紧贴尺寸用语的纯数字(台面3040/台面300400)，
+                # 位数不符(如 30000400)或拆不开时返回 None 按缺参处理
+                for text, pattern in ((suffix, _COMPACT_SIZE_HEAD_RE),
+                                      (prefix, _COMPACT_SIZE_TAIL_RE)):
+                    hit = pattern.search(_SIZE_COLLOQUIAL_RE.sub(r"\1.\2", text or ""))
+
+                    if hit:
+                        compact = compact_size_to_mm(hit.group(1))
+
+                        if compact is None:
+                            self._last_reason = "台面尺寸「{}」无法拆分".format(
+                                hit.group(1))
+                        return compact
+
+                self._last_reason = "未识别到台面尺寸"
                 return None
-            return "{}x{}".format(m.group(1), m.group(2))
+
+            # 写了单位(1.5m×1.5m / 30x40cm)按单位换算成通表口径 mm；
+            # 未写单位(1.2x1.5 / 1500x1500 / 1米5→1.5)保留原数值形态，
+            # 由 build_engine_input 的 size_to_mm 统一归一到 mm
+            if m.group(2) or m.group(4):
+                return size_to_mm(m.group(0))
+
+            return "{}x{}".format(m.group(1), m.group(3))
 
         if ptype == "option":
             # 选项词可能在用语前后("分体安装"/"供电DC24V")，也可能就是用语本身("导轨式"/"壁挂支架")
@@ -532,7 +678,8 @@ class Parser:
         return None
 
     def _weight_in(self, text, unit_table, prefer_last=False):
-        """在一段文本中提取 数值+单位 并换算为 kg；无单位数值按 kg；找不到返回 None"""
+        """在一段文本中提取 数值+单位 并换算为 kg；无单位数值按 kg；
+        数值左邻负号时返回负值(交调用方拒绝)，找不到返回 None"""
         if not text:
             return None
         matches = list(_NUMBER_RE.finditer(text))
@@ -540,10 +687,12 @@ class Parser:
         for m in ordered:
             unit = self._read_unit(text, m.end(), unit_table)
             if unit:
-                return float(m.group()) * unit_table[unit]
+                value = float(m.group()) * unit_table[unit]
+                return -value if _negated_at(text, m.start()) else value
         if matches:
             plain = matches[-1] if prefer_last else matches[0]
-            return float(plain.group())
+            value = float(plain.group())
+            return -value if _negated_at(text, plain.start()) else value
         return None
 
     def _int_in(self, text, prefer_last=False):
@@ -618,13 +767,16 @@ class Parser:
         com1_protocols = []
         modbus_count = 0
         bare_brands = []
+        bare_sizes = []
 
         for component in self.split_components(text):
             for fragment in self.split_parameters(component):
                 outcomes = self._parse_fragment(fragment) or [None]
-                # 片段是否已产出品牌参数：已产出(FT模块/仪表3306/SLB0)时
-                # 裸品牌词不再介入，避免把仪表品牌误补成秤台/传感器品牌
-                has_brand_param = False
+                # 片段内已产出的品牌值(FT模块->FT、仪表3306->FAB、SLB0->FT…)：
+                # 裸品牌词与其中之一相同时属同一次提及，不再重复归属，避免把
+                # 仪表品牌误补成秤台/传感器品牌；与已产出值不同则是另一次提及
+                # (品牌与仪表挤在同一片段："品牌FT 仪表3306")，仍须归属
+                brand_values = []
                 unresolved = False
 
                 for outcome in outcomes:
@@ -646,7 +798,7 @@ class Parser:
                     param_id = outcome["parameter"]
 
                     if param_id in ("m_brand", "c_brand"):
-                        has_brand_param = True
+                        brand_values.append(outcome["value"])
 
                     entry = {
                         "text": fragment,
@@ -690,15 +842,31 @@ class Parser:
                     else:
                         data[param_id] = outcome["value"]
 
-                # 裸品牌词二次识别("3吨平台秤,富林泰克"的独立片段、
-                # "3吨富林泰克平台秤"的量程粘连短语)：片段未产出品牌参数时
-                # 扫描品牌别名词表，全部片段处理完后再归属到空位品牌槽
-                if not has_brand_param:
-                    hit = self._brand_word_in(self._normalize(fragment))
+                # 裸尺寸二次识别("3米*3米碳钢平台秤"这类尺寸写在句首、不带
+                # "台面"前缀的写法)：本片段没产出台面尺寸时扫描独立 WxH 模式，
+                # 全部片段处理完后再归属到空位台面尺寸槽
+                has_size = any(
+                    outcome and outcome.get("kind") == "recognized"
+                    and outcome.get("parameter") == "台面尺寸"
+                    for outcome in outcomes)
 
-                    if hit is not None:
-                        bare_brands.append((fragment, hit))
-                        unresolved = False
+                if not has_size:
+                    size_hit = _SIZE_RE.search(
+                        _SIZE_COLLOQUIAL_RE.sub(r"\1.\2",
+                                                self._normalize(fragment)))
+
+                    if size_hit is not None:
+                        bare_sizes.append((fragment, size_hit.group(0)))
+
+                # 裸品牌词二次识别("3吨平台秤,富林泰克"的独立片段、
+                # "3吨富林泰克平台秤"的量程粘连短语、"品牌FT 仪表3306"这种
+                # 品牌与仪表写在同一片段的情形)：扫描品牌别名词表，全部片段
+                # 处理完后再归属到空位品牌槽
+                hit = self._brand_word_in(self._normalize(fragment))
+
+                if hit is not None and hit[1] not in brand_values:
+                    bare_brands.append((fragment, hit))
+                    unresolved = False
 
                 if unresolved:
                     unrecognized.append(fragment)
@@ -722,6 +890,29 @@ class Parser:
                 "source": "brand_word",
                 "value": canonical,
             })
+
+        # 裸尺寸归属：仅在台面尺寸仍空着时填第一个命中(同一描述多段尺寸
+        # 写法以首个为准)；带单位的换算成 mm，无单位保留原形态，由
+        # build_engine_input 的 size_to_mm 统一归一
+        if bare_sizes and "台面尺寸" not in data:
+            fragment, hit = bare_sizes[0]
+            m = _SIZE_RE.search(hit)
+
+            if m is not None:
+                value = (size_to_mm(hit) if (m.group(2) or m.group(4))
+                         else "{}x{}".format(m.group(1), m.group(3)))
+                data["台面尺寸"] = value
+                recognized.append({
+                    "text": hit,
+                    "parameter": "台面尺寸",
+                    "term": hit,
+                    "source": "bare_size",
+                    "value": value,
+                })
+
+                # 纯尺寸片段("3000x3000平台秤")已被解释，不再重复报未识别
+                if fragment in unrecognized:
+                    unrecognized.remove(fragment)
 
         com1_code = self._derive_com1_code(com1_protocols, modbus_count)
 
@@ -847,7 +1038,10 @@ class Parser:
                 outcomes.append({
                     "kind": "warning",
                     "parameter": param_id,
-                    "reason": "识别到参数[{}]，但未提取到合法值".format(param_id),
+                    # 原因会出现在给用户看的失败提示里：优先用 extract_value
+                    # 给出的具体说法，兜底也只用用户自己的用语，不暴露字段ID
+                    "reason": self._last_reason or
+                    "「{}」的取值无法识别，请写明具体数值".format(match.group()),
                 })
                 continue
 

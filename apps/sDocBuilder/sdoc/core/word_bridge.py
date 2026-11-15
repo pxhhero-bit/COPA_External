@@ -119,9 +119,14 @@ def _export_via_com(docx_path: str, pdf_path: str) -> "str | None":
     except Exception:
         return None
     finally:
-        for close in (lambda: doc.Close(False), lambda: app.Quit()):
+        if doc is not None:
             try:
-                close()
+                doc.Close(False)
+            except Exception:
+                pass
+        if app is not None:
+            try:
+                app.Quit()
             except Exception:
                 pass
         pythoncom.CoUninitialize()
@@ -188,9 +193,14 @@ def update_fields(docx_path: str) -> bool:
     except Exception:
         return False
     finally:
-        for close in (lambda: doc.Close(False), lambda: app.Quit()):
+        if doc is not None:
             try:
-                close()
+                doc.Close(False)
+            except Exception:
+                pass
+        if app is not None:
+            try:
+                app.Quit()
             except Exception:
                 pass
         pythoncom.CoUninitialize()

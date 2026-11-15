@@ -3,6 +3,6 @@
     "smtp_port": 465,
     "use_ssl": true,
     "sender": "feedback@copa-demo.example",
-    "auth_code": "",
+    "auth_code": "authorization code",
     "receiver": "feedback@copa-demo.example"
 }

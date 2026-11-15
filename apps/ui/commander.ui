@@ -61,6 +61,8 @@ QMainWindow {background-color: rgb(117, 117, 117)}</string>
    </attribute>
    <addaction name="actionToolA"/>
    <addaction name="actionToolB"/>
+   <addaction name="actionLlmChat"/>
+   <addaction name="actionToolC"/>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -123,6 +125,7 @@ QMenu::separator {
     </property>
     <addaction name="actionNew"/>
     <addaction name="actionNSD"/>
+    <addaction name="actionLlmChat"/>
     <addaction name="actionOpen"/>
     <addaction name="separator"/>
     <addaction name="actionSave"/>
@@ -151,8 +154,15 @@ QMenu::separator {
     <addaction name="actionInfo"/>
     <addaction name="actionFeedback"/>
    </widget>
+   <widget class="QMenu" name="menuTools">
+    <property name="title">
+     <string>工具</string>
+    </property>
+    <addaction name="actionToolC"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
+   <addaction name="menuTools"/>
    <addaction name="menuConfig"/>
   </widget>
   <widget class="QStatusBar" name="statusbar">
@@ -160,6 +170,17 @@ QMenu::separator {
     <string notr="true">background-color: rgb(226, 226, 226)</string>
    </property>
   </widget>
+  <action name="actionLlmChat">
+   <property name="icon">
+    <iconset theme="mail-send"/>
+   </property>
+   <property name="text">
+    <string>对话选型</string>
+   </property>
+   <property name="toolTip">
+    <string>在COPA内澄清需求并进入选型清单</string>
+   </property>
+  </action>
   <action name="actionNew">
    <property name="icon">
     <iconset theme="document-new"/>
@@ -334,6 +355,17 @@ QMenu::separator {
    </property>
    <property name="toolTip">
     <string>sDocBuilder 技术方案编排</string>
+   </property>
+  </action>
+  <action name="actionToolC">
+   <property name="icon">
+    <iconset theme="edit-find"/>
+   </property>
+   <property name="text">
+    <string>报价诊断</string>
+   </property>
+   <property name="toolTip">
+    <string>报价单一致性检查与批阅（Audit）</string>
    </property>
   </action>
   <action name="actionNSD">

@@ -23,3 +23,8 @@ Thumbs.db
 *.log
 apps/sDocBuilder/output/_preview
 *.bak
+
+# Runtime artifacts (session archives hold user wording, never commit them)
+llm/sessions/
+data/cache/
+apps/sDocBuilder/output/

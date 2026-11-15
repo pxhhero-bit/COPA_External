@@ -199,8 +199,8 @@ class Ui_quoteChecklist(object):
     def retranslateUi(self, quoteChecklist):
         quoteChecklist.setWindowTitle(QCoreApplication.translate("quoteChecklist", u"\u9009\u578b\u6e05\u5355 ", None))
         self.label.setText(QCoreApplication.translate("quoteChecklist", u"\u62a5\u4ef7\u62ac\u5934", None))
-        self.titalComBox.setItemText(0, QCoreApplication.translate("quoteChecklist", u"\u9a91\u665f", None))
-        self.titalComBox.setItemText(1, QCoreApplication.translate("quoteChecklist", u"\u827e\u529b\u5a01", None))
+        self.titalComBox.setItemText(0, QCoreApplication.translate("quoteChecklist", u"COPA B", None))
+        self.titalComBox.setItemText(1, QCoreApplication.translate("quoteChecklist", u"COPA A", None))
 
         self.serviceCheckBox_1.setText(QCoreApplication.translate("quoteChecklist", u"\u73b0\u573a\u670d\u52a1", None))
         self.langLabel.setText(QCoreApplication.translate("quoteChecklist", u"\u62a5\u4ef7\u8bed\u8a00", None))

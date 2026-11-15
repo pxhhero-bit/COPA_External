@@ -20,6 +20,11 @@ from COPA.apps import app_icon
 from COPA.apps.MultiCombo import CheckableComboBox
 from COPA.apps.Parser import Parser
 from COPA.apps.SyncParser import SyncParser
+from COPA.apps.contract import (
+    _missing_message,
+    _missing_required,
+    build_engine_input,
+)
 from COPA.apps.Ui_quotecard import Ui_Quotecard
 from COPA.apps.Ui_guicard import Ui_Guicard
 from COPA.apps.Ui_quoteDesk import Ui_quoteDesk
@@ -475,93 +480,6 @@ class GuiCard(QWidget, Ui_Guicard):
         return _int_value(text)
 
 
-def build_engine_input(entry):
-    """卡片条目 -> engine 需求格式参数（EngineService._build_input 的纯函数版）。
-
-    仅依赖 engine 模块导入时的 resolver（规则JSON），不装载数据库即可生成，
-    快照导出与实际计算共用同一构建逻辑。参数全部由卡片输入决定：结构化字段
-    (item_type/metrology/high_precision/Ex_P) + Parser 从 description 解析出的
-    标准参数(req_com1 缺省已在解析步归一)。约定缺省：req_com2 -> 空，多通道 ->
-    单通道，量程/e值 -> 空，防爆未给等级 -> IIBT4(业务最低防爆等级)，
-    搅拌缺省/无搅拌 -> 转速0，电池未提及 -> 无电池
-    """
-    parsed = entry.get("parsed", {}).get("data", {})
-
-    item_type = engine.resolver.resolve_item_type(
-        entry["item_type"]
-    )
-    # platform/bench：只报量程未报W1时，量程兼任W1(量程向上取档的输入)；
-    # platform/bench 的选型不走 metrology 模块，r_input 不作替代将无处生效。
-    # 模块通道量程与W1并存，不做替代
-    w1 = parsed.get("W1")
-    r_input = parsed.get("r_input")
-
-    if item_type in ("platform", "bench") and w1 is None:
-        w1 = r_input
-
-    ex_p = entry["Ex_P"] or bool(parsed.get("Ex_P", False))
-    bracket = parsed.get("分体仪表支架")
-    # 无搅拌时压掉可能杂散解析出的转速("不带搅拌，转速200"以无搅拌为准)
-    vibration = bool(parsed.get("vibration", False))
-    # special_req 解析为通道数，>=2 才是 engine 的多通道语义
-    channels = parsed.get("special_req") or 0
-
-    return {
-        "module_data": {
-            "item_type": item_type,
-            "W1": w1,
-            "W2": parsed.get("W2"),
-            "support": parsed.get("support"),
-            "Ex_P": ex_p,
-            "required_ex": (
-                parsed.get("required_ex") or "IIBT4"
-            ) if ex_p else False,
-            "material": parsed.get("material"),
-            "vibration": vibration,
-            "RPM": parsed.get("RPM", 0) if vibration else 0,
-            "台面尺寸": parsed.get("台面尺寸"),
-            "高精度": entry["high_precision"] or bool(parsed.get("高精度", False)),
-            # 数字化方案：仅卡片开关通道(不在描述文本中解析)
-            "数字化": bool(entry.get("digital", False)),
-            "e_input": parsed.get("e_input"),
-            "安装形式": parsed.get("安装形式"),
-            "分体仪表支架": bracket,
-            "m_brand": parsed.get("m_brand"),
-            "c_brand": parsed.get("c_brand"),
-            # 用户点名仪表系列(Parser 二次识别，如 3306/FAB330)，engine 按系列收敛
-            "c_family": parsed.get("c_family"),
-        },
-        "metrology": {
-            "metrology": entry["metrology"] or bool(parsed.get("metrology", False)),
-            "r_input": parsed.get("r_input"),
-            "e_input": parsed.get("e_input")
-        },
-        "com": {
-            "req_com1": parsed.get("req_com1"),
-            "req_com2": parsed.get("req_com2"),
-            "special_req": channels >= 2,
-            "special_req2": bool(parsed.get("special_req2", False))
-        },
-        "hardware": {
-            "install": parsed.get("install"),
-            "power": parsed.get("power"),
-            "bracket": bracket
-        }
-    }
-
-
-# 缺参提示中文映射：engine 标准参数ID -> 中文名(表外键原样显示，
-# 如"台面尺寸"本就是中文)
-_PARAM_CN = {
-    "m_brand": "传感器品牌",
-    "c_brand": "仪表品牌",
-    "support": "支点数",
-    "material": "模块材质",
-    "W1": "最大物料重量",
-    "W2": "设备自重",
-}
-
-
 class EngineService:
     """engine 选型计算服务：规则与数据库懒加载，逐条串行计算。
 
@@ -666,9 +584,9 @@ class EngineService:
                     "quote_id": quote_id,
                     "item_type": entry["item_type"],
                     "status": "ERROR",
-                    "error": "缺少必要参数：{}（请在项目描述中补充）".format(
-                        "、".join(_PARAM_CN.get(key, key) for key in missing)
-                    )
+                    "error": _missing_message(
+                        missing, engine_input["module_data"]["item_type"],
+                        entry.get("parsed"))
                 }
 
             # 传感器表按条目 m_brand 取用；品牌未填写(平台秤可选)时合并
@@ -690,11 +608,12 @@ class EngineService:
                 quote_id=quote_id
             )
         except Exception as err:
+            # 异常原文保留(便于定位)，外面包一层中文说明，避免弹窗只显示英文报错
             return {
                 "quote_id": quote_id,
                 "item_type": entry["item_type"],
                 "status": "ERROR",
-                "error": str(err)
+                "error": "选型计算出错：{}（反复出现请通过「反馈」提交此提示）".format(err)
             }
 
     def _build_input(self, entry):
@@ -706,31 +625,7 @@ class EngineService:
 
     @staticmethod
     def _missing_required(engine_input):
-        # 引擎对空值敏感的必填参数预检：缺失时给出可读错误，
-        # 而不是让引擎在计算中途抛 TypeError。
-        # platform/bench 的W1已在 _build_input 中由量程兼任，
-        # 故此处 W1 有值即代表 量程/W1 至少其一满足。
-        # m_brand(传感器品牌)：模块/台秤必填；平台秤可选——未填写时
-        # 双品牌平台均参选、传感器库合并(AW+FT)
-        module_data = engine_input["module_data"]
-        required = ["W1", "c_brand", "material"]
-
-        if module_data["item_type"] == "module":
-            required += ["m_brand", "support"]
-        elif module_data["item_type"] == "bench":
-            required += ["m_brand"]
-
-        missing = [
-            key for key in required
-            if module_data.get(key) is None
-        ]
-
-        if module_data["item_type"] in ("platform", "bench"):
-            # 台面尺寸在 module_data；电池未提及时已在 _build_input 缺省为无电池
-            if module_data.get("台面尺寸") is None:
-                missing.append("台面尺寸")
-
-        return missing
+        return _missing_required(engine_input)
 
 
 class Desk(QWidget, Ui_quoteDesk):
@@ -1133,7 +1028,14 @@ class Desk(QWidget, Ui_quoteDesk):
         if data.get("req_com2"):
             values["req_com2"] = [str(x) for x in data["req_com2"]]
 
-        card.checkBox_3.setChecked(bool(data.get("Ex_P")))
+        # 防爆复选框是人工开关，描述未提防爆时不得被「未提及=复位」清掉：
+        # 仅在解析确实给出 Ex_P(描述写了防爆/无需防爆)时按文本覆盖
+        if "Ex_P" in data:
+            card.checkBox_3.setChecked(bool(data["Ex_P"]))
+
+        # 描述未给防爆等级而人工勾选仍在时，保留下拉已选等级(不被清成缺省)
+        if card.checkBox_3.isChecked() and not data.get("required_ex"):
+            values["required_ex"] = card.combo_required_ex.currentText().strip()
 
         for key, combo in (("W1", card.combo_W1), ("W2", card.combo_W2),
                            ("support", card.combo_support),

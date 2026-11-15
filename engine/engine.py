@@ -8,6 +8,7 @@ import json
 import csv
 import math
 import os
+import re
 import sys
 
 # 数据根目录：冻结打包后 config/data 随 exe 同目录手动摆放(保持源码结构)，
@@ -407,6 +408,7 @@ def run_engine(
             resolver=resolver,
             benches_db=benches_db,
             controller_db=controller_db,
+            sensors_db=sensors_db,
         )
     elif item_type == "truck_A":
         product_result = run_truck_A(
@@ -476,7 +478,10 @@ class DatabaseLoader:
                 "安装孔距": float(row['安装孔距']),
                 "IP防护等级": row['IP防护等级'],
                 "Seal密封方式": row['Seal密封方式'],
-                "线制": int(row['线制'])
+                "线制": int(row['线制']),
+                # 单点式专用：该容量档允许的最大台面边长(mm，正方形等效值)；
+                # 其他安装方式无此约束，留空
+                "最大台面尺寸": float(row.get('最大台面尺寸') or 0) or None
             })
         return sensors
 
@@ -615,6 +620,10 @@ def select_sensors(
 ):
     sensor_candidates = []
     for sensor in sensors_db:
+            # 单点式(台秤专用)不参与模块/平台秤选型：其安装孔距为0，
+            # 留着只会挤占候选池，把真正能配模块的系列挤掉导致 NO_MATCH
+            if sensor.get("安装方式") == "单点式":
+                continue
             sensor["EX_bool"] = False if sensor["EX_level"] == "0" else True  # 0表示非防爆，非0表示防爆
             SF = calculate_safety_factor(W1, W2, support, sensor['capacity容量'])
             sensor_candidates.append({
@@ -1152,8 +1161,10 @@ def run_platform(
     in_range = [p for p in candidates if p["量程"] >= W1]
     diagnostic["rejection"]["量程不满足W1"] = len(candidates) - len(in_range)
     if not in_range:
-        diagnostic["evidence"]["max_range"] = max(p["量程"] for p in candidates)
-        return _no_match(f"W1={W1}kg 超出该组合下平台秤最大量程档位")
+        max_range = max(p["量程"] for p in candidates)
+        diagnostic["evidence"]["max_range"] = max_range
+        return _no_match("量程 {}kg 超出该组合下平台秤最大量程档位（最大 {}kg）".format(
+            W1, max_range))
     target_range = min(p["量程"] for p in in_range)
     candidates = [p for p in in_range if p["量程"] == target_range]
     diagnostic["stage_counts"]["range_pass"] = len(candidates)
@@ -1166,10 +1177,12 @@ def run_platform(
         candidates = passed
     diagnostic["stage_counts"]["size_pass"] = len(candidates)
     if not candidates:
-        available = [p["台面尺寸"] for p in platforms_db
-                     if p["品牌"] == m_brand and p["量程"] == target_range]
+        available = list(dict.fromkeys(
+            p["台面尺寸"] for p in platforms_db
+            if p["品牌"] == m_brand and p["量程"] == target_range))
         diagnostic["evidence"]["available_sizes"] = available
-        return _no_match(f"台面尺寸不匹配，该档位可选台面：{available}")
+        return _no_match("台面尺寸不匹配，{}kg 档可选台面：{}".format(
+            target_range, "、".join(available)))
 
     # 7. e_input分度值要求：保留分度值不劣于要求的行（未输入则不过滤）
     if e_input is not None:
@@ -1230,11 +1243,205 @@ BENCH_SUBTYPE = {
     False: "电子台秤",
 }
 
+def bench_deck_probe(deck_text):
+    """台面尺寸 -> 等效边长(mm)：'300x400' -> sqrt(300*400)=346。
+
+    单点式厂家的"最大台面尺寸"给的是正方形边长，矩形台面按等效边长比较：
+    同一块 300x400 台面，长边口径(400)会判死在 PC6-10/20 的 350 上限外，
+    等效边长(346)与其对角线口径结论一致，故取等效边长。
+    """
+    parts = re.split(r"[x×*X]", str(deck_text or "").strip())
+
+    if len(parts) != 2:
+        return None
+
+    try:
+        return math.sqrt(float(parts[0]) * float(parts[1]))
+    except ValueError:
+        return None
+
+def select_bench_sensors(bench_row, sensors_db, Ex_P, rules):
+    """台秤单点式传感器选型：防爆 -> 品牌+材质定系列fence -> 台面上限
+    -> 容量倍率在 1.3~2.5 窗口内就近 2.0。
+
+    返回 {"candidates": [...], "default": 行|None, "SF": 倍率, "flag": ok/over/under,
+          "reason": 空候选原因}。candidates 按(倍率区间段, fence顺序, 容量)升序，
+    Checklist 下拉直接用；default 即首选(厂家常用配置 override 优先)。
+
+    fence 的意义：碳钢默认只用铝传感器，铝组无解才动用不锈钢组，
+    避免"容量更小"把 PC60-300 挤成 PCB-250 这类跨材质降配。
+    """
+    empty = {"candidates": [], "default": None, "SF": None, "flag": None,
+             "reason": ""}
+    cfg = (rules or {}).get("bench_sensor_rules") or {}
+
+    if not bench_row or not sensors_db:
+        return dict(empty, reason="台秤行或传感器库为空")
+
+    brand = (bench_row.get("品牌") or "").strip().upper()
+    material = (cfg.get("material_map") or {}).get(
+        (bench_row.get("材质") or "").strip().upper(), "")
+    fence = ((cfg.get("family_fence") or {}).get(brand) or {}).get(material) or []
+
+    if not fence:
+        return dict(empty, reason="{} 无单点式传感器数据".format(
+            brand or "该品牌"))
+
+    probe = bench_deck_probe(bench_row.get("台面尺寸"))
+
+    if probe is None:
+        return dict(empty, reason="台面尺寸无法解析")
+
+    try:
+        rated = float(bench_row.get("量程"))
+    except (TypeError, ValueError):
+        return dict(empty, reason="量程无法解析")
+
+    if rated <= 0:
+        return dict(empty, reason="量程非法")
+
+    ratio_cfg = cfg.get("capacity_ratio") or {}
+    lo = float(ratio_cfg.get("preferred_min", 1.5))
+    tol = float(ratio_cfg.get("tolerant_min", 1.3))
+    hi = float(ratio_cfg.get("max", 2.5))
+    target = float(ratio_cfg.get("target", 2.0))
+    pool = []
+
+    for group_idx, group in enumerate(fence):
+        for fam_idx, family in enumerate(group):
+            for sensor in sensors_db:
+                if sensor.get("安装方式") != "单点式":
+                    continue
+
+                if sensor.get("family型号") != family:
+                    continue
+
+                # 防爆只看是否防爆(与模块传感器筛选同口径)，不比等级
+                if ((sensor.get("EX_level") or "0") != "0") != bool(Ex_P):
+                    continue
+
+                capacity = sensor.get("capacity容量") or 0
+                deck_limit = sensor.get("最大台面尺寸")
+
+                if deck_limit and probe > deck_limit:
+                    continue
+
+                pool.append((group_idx, fam_idx, sensor, capacity / rated))
+
+    if not pool:
+        return dict(empty, reason="无满足防爆/台面/材质的单点式传感器")
+
+    def band(sf):
+        if lo <= sf <= hi:
+            return 0        # 目标区间，优先
+        if tol <= sf < lo:
+            return 1        # 放宽到绿区下限
+        if sf < tol:
+            return 2        # 容量偏小，危险
+        return 3            # 超红线，浪费
+
+    # 同区间内优先"倍率最接近 target(2.0)"的档位：1.3~2.5 只是可用窗口，
+    # 2.0 附近才是余量与成本的最优点。距离相同再取容量小的，保证结果稳定。
+    pool.sort(key=lambda t: (band(t[3]), t[0], t[1],
+                             round(abs(t[3] - target), 6),
+                             t[2]["capacity容量"]))
+
+    # 厂家常用配置：override 命中就用它(仍须满足防爆/台面，否则忽略)
+    override = None
+
+    for rule in cfg.get("overrides") or []:
+        if (str(rule.get("brand", "")).strip().upper() != brand
+                or rule.get("material") != material
+                or rule.get("range") != rated):
+            continue
+
+        for item in pool:
+            if (item[2]["family型号"] == rule.get("family")
+                    and int(item[2]["capacity容量"]) == int(rule.get("capacity", 0))):
+                override = item
+                break
+
+        if override is not None:
+            break
+
+    ordered = ([override] if override is not None else []) + [
+        t for t in pool if t is not override]
+
+    default = ordered[0]
+
+    # 候选池只留绿区全段(1.3~2.5)内的档位 + 默认项，避免下拉里出现
+    # 30kg 配 1000kg 这类荒谬项；默认项必在首位(Checklist 直接取第一条
+    # 即默认值，顺序不能把它挤走)。
+    # 其余候选项按 fence 的系列顺序排(型号之间不受影响)，同一型号
+    # (family+capacity)若有多个 Y 值，则内部按 Y 从低到高排。
+    rest = [t for t in ordered if t is not default and tol <= t[3] <= hi]
+    rest.sort(key=lambda t: (band(t[3]), t[0], t[1],
+                             round(abs(t[3] - target), 6),
+                             t[2]["capacity容量"], int(t[2].get("Y值") or 0)))
+    usable = [default] + rest
+
+    candidates = []
+
+    for group_idx, fam_idx, sensor, sf in usable:
+        row = dict(sensor)
+        row["SF"] = round(sf, 4)
+        row["flag"] = ("ok" if band(sf) == 0
+                       else "tolerant" if band(sf) == 1
+                       else "under" if band(sf) == 2
+                       else "over")
+        row["is_override"] = (override is not None
+                              and sensor is override[2])
+        candidates.append(row)
+
+    default_row = candidates[0]
+
+    return {
+        "candidates": candidates,
+        "default": default_row,
+        "SF": default_row["SF"],
+        "flag": default_row["flag"],
+        "reason": "",
+        "deck_probe": round(probe, 1),
+        "material": material,
+    }
+
+# 仪表筛选各环节的中文名：按筛序排列，第一个归零的环节即为失败原因
+_CONTROLLER_STAGE_CN = (
+    ("brand_pass", "仪表品牌"),
+    ("family_pass", "仪表系列"),
+    ("digital_pass", "数字化方案"),
+    ("series_pass", "指定系列"),
+    ("communication_pass", "通讯协议"),
+    ("hardware_pass", "安装方式/供电/支架"),
+    ("ex_pass", "防爆等级"),
+)
+
+
+def _controller_empty_reason(diagnostic, brand=None):
+    """仪表筛空原因：取第一个归零环节，让提示能指到具体条件而不是笼统说无匹配"""
+    counts = (diagnostic or {}).get("stage_counts") or {}
+
+    if not counts.get("initial"):
+        return "仪表数据库为空或未加载"
+
+    if not counts.get("brand_pass"):
+        # 品牌都不命中通常是把型号写错成了品牌(仪表XYZ999)，回显原文便于核对
+        return "仪表「{}」不存在或该品牌无可用型号，请核对仪表型号".format(
+            brand or "")
+
+    for key, label in _CONTROLLER_STAGE_CN:
+        if counts.get(key) == 0:
+            return "无匹配仪表：{}环节已无候选，请核对仪表选型与需求".format(label)
+
+    return "无匹配仪表，请核对仪表选型与需求"
+
+
 def run_bench(
     user_input,
     resolver,
     benches_db,
-    controller_db
+    controller_db,
+    sensors_db=None
 ):
     """台秤选型pipeline：
     品牌 -> 细分品种(由是否高精度映射) -> 材质 -> 防爆 -> W1向上取档 -> 台面尺寸 -> e_input分度值
@@ -1348,8 +1555,10 @@ def run_bench(
     in_range = [p for p in candidates if p["量程"] >= W1]
     diagnostic["rejection"]["量程不满足W1"] = len(candidates) - len(in_range)
     if not in_range:
-        diagnostic["evidence"]["max_range"] = max(p["量程"] for p in candidates)
-        return _no_match(f"W1={W1}kg 超出该组合下台秤最大量程档位")
+        max_range = max(p["量程"] for p in candidates)
+        diagnostic["evidence"]["max_range"] = max_range
+        return _no_match("量程 {}kg 超出该组合下台秤最大量程档位（最大 {}kg）".format(
+            W1, max_range))
     target_range = min(p["量程"] for p in in_range)
     candidates = [p for p in in_range if p["量程"] == target_range]
     diagnostic["stage_counts"]["range_pass"] = len(candidates)
@@ -1362,10 +1571,13 @@ def run_bench(
         candidates = passed
     diagnostic["stage_counts"]["size_pass"] = len(candidates)
     if not candidates:
-        available = [p["台面尺寸"] for p in benches_db
-                     if p["品牌"] == m_brand and p["量程"] == target_range]
+        # 可选尺寸去重并按通表顺序展示：同一档位每行都带尺寸，不去重会重复十几遍
+        available = list(dict.fromkeys(
+            p["台面尺寸"] for p in benches_db
+            if p["品牌"] == m_brand and p["量程"] == target_range))
         diagnostic["evidence"]["available_sizes"] = available
-        return _no_match(f"台面尺寸不匹配，该档位可选台面：{available}")
+        return _no_match("台面尺寸不匹配，{}kg 档可选台面：{}".format(
+            target_range, "、".join(available)))
 
     # 7. e_input分度值
     if e_input is not None:
@@ -1394,14 +1606,25 @@ def run_bench(
         required_ex=module_data["required_ex"]
     )
 
+    controller_results = controllers["results"]
+
+    # 台秤必须带仪表：整机有候选但仪表筛空时不能报 OK，否则报价单会出现
+    # 「有秤无仪表」；原因写进 evidence 供失败提示直接引用
+    if candidates and not controller_results:
+        diagnostic["status"] = "NO_MATCH"
+        diagnostic["evidence"]["reason"] = _controller_empty_reason(
+            controllers["diagnostic"], c_brand)
+
     return {
         "item_type": "bench",
         "bench": candidates,
         "jbox": None,
-        "controller": controllers["results"],
+        "bench_sensor": select_bench_sensors(
+            candidates[0], sensors_db, Ex_P, resolver.rules) if candidates else None,
+        "controller": controller_results,
         "controller_diagnostic": controllers["diagnostic"],
         "bench_diagnostic": diagnostic,
-        "status": "OK" if candidates else "NO_MATCH",
+        "status": "OK" if candidates and controller_results else "NO_MATCH",
     }
 
 #汽车衡选型定义

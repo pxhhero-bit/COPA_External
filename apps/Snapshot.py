@@ -12,7 +12,7 @@ import sys
 from datetime import datetime
 
 from COPA.apps.Desk import build_engine_input
-from COPA.apps.version import APP_RELEASE_DATE, APP_VERSION
+from COPA.apps.version import APP_RELEASE_DATE, version_text
 
 # 快照目录随部署形态定位(与 engine 的 data 目录同一约定)：冻结打包后
 # snapshot 随 exe 同目录摆放；源码运行时按本文件位置上溯到包根
@@ -48,8 +48,14 @@ def suggest_path(project_id):
 
 def save_snapshot(path, project_id, desk, checklist=None, created_at=None):
     """采集当前项目完整状态并写入 markdown 快照；返回实际写入路径。
-    created_at 为首次保存时间文本(None 时与本次保存时间相同)，由上层记忆"""
-    markdown = build_markdown(project_id, desk, checklist, created_at)
+    created_at 为首次保存时间文本(None 时与本次保存时间相同)，由上层记忆。
+
+    覆盖写之前先把文件里已有的出单记录取回来——出单记录由 Writer 在报价成功
+    时追加，不属于「当前界面状态」，不继承就会被这次保存冲掉，那份报价单从此
+    没有比对基线。
+    """
+    markdown = build_markdown(project_id, desk, checklist, created_at,
+                              orders=read_orders(path))
     directory = os.path.dirname(path)
 
     if directory:
@@ -62,8 +68,10 @@ def save_snapshot(path, project_id, desk, checklist=None, created_at=None):
     return path
 
 
-def build_markdown(project_id, desk, checklist=None, created_at=None):
-    """Desk + Checklist 当前状态 -> 完整快照 markdown 文本（不落盘）"""
+def build_markdown(project_id, desk, checklist=None, created_at=None,
+                   orders=None):
+    """Desk + Checklist 当前状态 -> 完整快照 markdown 文本（不落盘）。
+    orders 为已出过报价单的基线记录（见 orders_section），沿用不丢。"""
     saved_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     entries = desk.collect_entries()
     states = checklist.dump_state() if checklist is not None else None
@@ -81,7 +89,7 @@ def build_markdown(project_id, desk, checklist=None, created_at=None):
             ("现场服务（整单）", _checkbox_of(desk, "serviceCheckBox")),
             ("选型清单", "已生成（{} 项）".format(len(states))
              if states is not None else "未生成"),
-            ("工具版本", "COPA {} ({})".format(APP_VERSION, APP_RELEASE_DATE)),
+            ("工具版本", "COPA {} ({})".format(version_text(), APP_RELEASE_DATE)),
         ]),
         "",
         "## 一、需求录入参数（Desk）",
@@ -95,7 +103,48 @@ def build_markdown(project_id, desk, checklist=None, created_at=None):
         lines += _entry_section(entry)
 
     lines += _checklist_section(checklist, states)
+    lines += _orders_section(orders)
     return "\n".join(lines)
+
+
+# ====出单记录段====
+
+def _orders_section(orders):
+    """出单记录：每输出一张报价单追加一条，含项目号与逐行基线。
+
+    基线（型号/数量/单价/总价）是批阅时判「这一行被人改过没有」的唯一依据，
+    以前单独躺在 data/cache/pno/<项目号>.json，现在并进项目快照——一个项目
+    出过哪几张单、每张单当时是什么样，打开这份 md 就全在。
+    """
+    lines = ["## 三、出单记录", ""]
+
+    if not orders:
+        lines += ["（尚未输出过报价单）", ""]
+        return lines
+
+    lines += ["每次输出报价单追加一条；批阅时按报价单 A 列里的项目号回查本节。", ""]
+
+    for payload in orders:
+        if not isinstance(payload, dict):
+            continue
+
+        code = str(payload.get("pno") or "").strip()
+
+        if not code:
+            continue
+
+        stamp = str(payload.get("built_at") or "").strip()
+        title = "{} · {}".format(code, stamp) if stamp else code
+        lines += [
+            "### {}".format(title),
+            "",
+            "```json",
+            json.dumps(payload, ensure_ascii=False, default=str),
+            "```",
+            "",
+        ]
+
+    return lines
 
 
 # ====Desk 需求录入段====
@@ -281,6 +330,7 @@ def parse_snapshot(path):
         "onsite_service": False,
         "entries": [],
         "checklist": None,
+        "orders": [],
     }
     meta = {"title": "", "lang": "", "onsite_service": False}
     items = []
@@ -301,8 +351,14 @@ def parse_snapshot(path):
             i += 1
             continue
 
-        if stripped.startswith("## 一、") or stripped.startswith("## 二、"):
-            section = "desk" if stripped.startswith("## 一、") else "checklist"
+        if stripped.startswith("## 一、") or stripped.startswith("## 二、") \
+                or stripped.startswith("## 三、"):
+            if stripped.startswith("## 一、"):
+                section = "desk"
+            elif stripped.startswith("## 二、"):
+                section = "checklist"
+            else:
+                section = "orders"
             current = None
             i += 1
             continue
@@ -333,9 +389,18 @@ def parse_snapshot(path):
                 buf.append(lines[i])
                 i += 1
 
-            if current is not None and buf:
+            block = "\n".join(buf)
+
+            if section == "orders":
                 try:
-                    current.update(json.loads("\n".join(buf)))
+                    payload = json.loads(block)
+                except ValueError:
+                    payload = None      # 围栏损坏：丢掉这一条，其余照常恢复
+                if isinstance(payload, dict) and payload.get("pno"):
+                    data["orders"].append(payload)
+            elif current is not None and buf:
+                try:
+                    current.update(json.loads(block))
                 except ValueError:
                     pass   # 围栏内容损坏：跳过该块，其余照常恢复
 
@@ -467,3 +532,110 @@ def _unquote(line):
     """剥掉引用块前缀：「> 文本」->「文本」"""
     text = line[1:]
     return text[1:] if text.startswith(" ") else text
+
+
+# ====出单记录读写（批阅比对基线）====
+
+def read_orders(path):
+    """只取快照里的出单记录；文件不存在/不可读返回空列表"""
+    if not path or not os.path.exists(path):
+        return []
+
+    try:
+        return parse_snapshot(path).get("orders") or []
+    except OSError:
+        return []
+
+
+def append_order(path, payload):
+    """把一条出单记录追加到项目快照；返回是否写入成功。
+
+    只追加、不改写正文：正文由 save_snapshot 生成，在这里重排会把 Desk/
+    Checklist 的渲染格式弄坏。下一轮保存时 build_markdown 会带着这些记录
+    重排到规范位置，所以追加位置只要在文件末尾即可。
+    """
+    code = str((payload or {}).get("pno") or "").strip()
+
+    if not path or not code or not os.path.exists(path):
+        return False
+
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            text = f.read()
+    except OSError:
+        return False
+
+    if "## 三、出单记录" not in text:
+        text = text.rstrip("\n") + "\n\n## 三、出单记录\n"
+
+    stamp = str(payload.get("built_at") or "").strip()
+    title = "{} · {}".format(code, stamp) if stamp else code
+    block = "\n### {}\n\n```json\n{}\n```\n".format(
+        title, json.dumps(payload, ensure_ascii=False, default=str))
+
+    try:
+        with open(path, "w", encoding="utf-8-sig", newline="\n") as f:
+            f.write(text.rstrip("\n") + "\n" + block)
+    except OSError:
+        return False
+
+    clear_order_cache()
+    return True
+
+
+_ORDER_CACHE = {"key": None, "map": {}}
+
+
+def find_order(pno, folder=None):
+    """按项目号在 snapshot/*.md 里找出单记录；找不到返回 None。
+
+    扫目录而不维护索引文件：快照是人可能手工改过的东西，索引一旦失真就会
+    给出错误基线。按「目录内各 md 的 mtime」做进程内缓存，批量批阅只扫一次。
+    """
+    code = (pno or "").strip()
+
+    if not code:
+        return None
+
+    target = folder or snapshot_dir()
+
+    try:
+        names = [n for n in sorted(os.listdir(target)) if n.lower().endswith(".md")]
+    except OSError:
+        return None
+
+    try:
+        # key 必须带上目录：否则测完临时目录再查真实 snapshot/ 会命中旧索引
+        key = (target, tuple((n, os.path.getmtime(os.path.join(target, n)))
+                             for n in names))
+    except OSError:
+        key = None
+
+    if key is not None and _ORDER_CACHE["key"] == key:
+        return _ORDER_CACHE["map"].get(code)
+
+    index = {}
+
+    for name in names:
+        path = os.path.join(target, name)
+
+        try:
+            orders = parse_snapshot(path).get("orders") or []
+        except OSError:
+            continue
+
+        for payload in orders:
+            found = str(payload.get("pno") or "").strip()
+
+            if found and found not in index:
+                item = dict(payload)
+                item.setdefault("snapshot", path)
+                index[found] = item
+
+    _ORDER_CACHE["key"], _ORDER_CACHE["map"] = key, index
+    return index.get(code)
+
+
+def clear_order_cache():
+    """快照被本进程改写后调用，避免拿 mtime 未变化的旧索引"""
+    _ORDER_CACHE["key"], _ORDER_CACHE["map"] = None, {}

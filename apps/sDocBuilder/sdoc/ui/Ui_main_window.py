@@ -242,8 +242,8 @@ class Ui_MainWindow(object):
         self.labelCustomerName.setText(QCoreApplication.translate("MainWindow", u"\u5ba2\u6237\u540d\u79f0", None))
         self.editCustomerName.setPlaceholderText(QCoreApplication.translate("MainWindow", u"\u65e0\u5feb\u7167\u65f6\u53ef\u76f4\u63a5\u8f93\u5165", None))
         self.label.setText(QCoreApplication.translate("MainWindow", u"\u516c\u53f8\u62ac\u5934", None))
-        self.comboBox.setItemText(0, QCoreApplication.translate("MainWindow", u"\u9a91\u665f", None))
-        self.comboBox.setItemText(1, QCoreApplication.translate("MainWindow", u"\u827e\u529b\u5a01", None))
+        self.comboBox.setItemText(0, QCoreApplication.translate("MainWindow", u"COPA B", None))
+        self.comboBox.setItemText(1, QCoreApplication.translate("MainWindow", u"COPA A", None))
 
         self.btnPreview.setText(QCoreApplication.translate("MainWindow", u"\u751f\u6210\u9884\u89c8", None))
         self.menuFile.setTitle(QCoreApplication.translate("MainWindow", u"\u6587\u4ef6", None))
