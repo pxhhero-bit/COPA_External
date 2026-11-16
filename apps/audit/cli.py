@@ -85,7 +85,9 @@ def print_rule_table():
         lines.append("| {} | {} | {} | {} |".format(
             code, level, meta.get("title", ""),
             (meta.get("advice", "") or "").replace("|", "／")))
-    path = os.path.join(_PROJECT_ROOT, "docs", "audit-规则总表.md")
+    # 写到 aidocs/：这是智能体生成的辅助文档，不入库（见 .gitignore）。
+    # 写 docs/ 会让每次生成规则总表都把工作区弄脏，而那份表本来就是产物。
+    path = os.path.join(_PROJECT_ROOT, "aidocs", "audit-规则总表.md")
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:

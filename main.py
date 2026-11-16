@@ -33,9 +33,9 @@ if _PROJECT_ROOT not in sys.path:
 import shiboken6
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QPixmap
-from PySide6.QtWidgets import (QAbstractButton, QApplication, QFileDialog,
-                               QGridLayout, QMainWindow, QMdiArea,
-                               QMdiSubWindow, QMessageBox, QVBoxLayout)
+from PySide6.QtWidgets import (QAbstractButton, QFileDialog, QGridLayout,
+                               QMainWindow, QMdiArea, QMdiSubWindow,
+                               QMessageBox, QVBoxLayout)
 
 # Desk 负责采集/解析/发起；Parser 与 engine 由 Desk(解析)与
 # EngineService(计算)装载使用；Checklist 为选型确认/报价输出窗口；

@@ -51,6 +51,10 @@ _PLACEHOLDER_UNDERLINE = "single"   # 占位空格带下划线，白底上才看
 
 _SHEET_TITLE = "诊断"
 
+# 行首是备注行：中文「备注：」与英文「Remarks:」/「Note:」。L14 只红那一行，
+# 型号行与其余参数行不连坐。
+_RE_NOTE_START = re.compile(r"^(?:备注|remarks?|notes?)\s*[:：]", re.IGNORECASE)
+
 # 缺参标签：中文模板与英文模板的写法都覆盖，用于把「两个空格」插到正确位置
 _MISSING_LABELS = {
     "量程": ("量程", "Capacity", "capacity"),
@@ -409,9 +413,9 @@ def _issue_ranges(issue, item, text: str) -> List[Tuple[int, int]]:
         return []
 
     if issue.code == "L14":
-        # 行级：只红描述内的备注行，不连坐型号行
+        # 行级：只红描述内的备注行，不连坐型号行（含英文 Remarks 行）
         return [(s, e) for s, e in lines
-                if _norm(text[s:e]).startswith("备注")]
+                if _RE_NOTE_START.match(text[s:e].strip())]
 
     if issue.code in ("L30", "L31"):
         # 电池类只标提到电池/电源/充电器的行。兰达 261027 的教训：型号与描述
@@ -815,7 +819,11 @@ def annotate_workbook_ex(report: Report, out_dir: str,
                 # span_scope=cell 的区间已经相对本格（抬头的跨格拼接换算过），
                 # 再按 desc 平移一次就会标到隔壁字上。
                 segments = []
-                if not missing_issues:
+                if issue.code == "L14":
+                    # 备注行可能中英各一行（双语单），issue.span 只记第一处，
+                    # 所以这里按行扫，把两种语言的备注行一起染
+                    segments = _issue_ranges(issue, item, text)
+                elif not missing_issues:
                     if getattr(issue, "span_scope", SPAN_DESC) == SPAN_CELL:
                         segments = _cell_span_ranges(issue, cell, text)
                     else:

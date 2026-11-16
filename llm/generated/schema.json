@@ -1,0 +1,707 @@
+{
+  "schema_version": 1,
+  "item_types": {
+    "称重模块": "module",
+    "台秤": "bench",
+    "平台秤": "platform"
+  },
+  "quote_titles": [
+    "COPA A",
+    "COPA B"
+  ],
+  "quote_title_by_m_brand": {
+    "FT": "COPA B",
+    "AW": "COPA A"
+  },
+  "materials": [
+    "碳钢",
+    "不锈钢",
+    "混合"
+  ],
+  "brands": {
+    "m_brand": [
+      "FT",
+      "AW"
+    ],
+    "c_brand": [
+      "FT",
+      "AW",
+      "FAB"
+    ]
+  },
+  "required_ex": [
+    "二区IIBT4",
+    "二区IICT5",
+    "二区IICT6",
+    "IIBT4",
+    "IICT4",
+    "IIBT5",
+    "IICT5",
+    "IIBT6",
+    "IICT6"
+  ],
+  "sizes": {
+    "平台秤": [
+      "600x600",
+      "800x800",
+      "1000x1000",
+      "1200x1200",
+      "1500x1500",
+      "2000x2000"
+    ],
+    "台秤": [
+      "240x300",
+      "300x400",
+      "400x500",
+      "460x600",
+      "500x600",
+      "600x800"
+    ]
+  },
+  "options": {
+    "安装形式": [
+      "一体",
+      "分体"
+    ],
+    "分体仪表支架": [
+      "壁挂支架",
+      "立杆支架",
+      "壁挂",
+      "立杆"
+    ],
+    "install": [
+      "面板式",
+      "导轨式",
+      "防尘式",
+      "隔爆"
+    ],
+    "power": [
+      "AC220V",
+      "DC24V"
+    ],
+    "protocols": [
+      "RS232",
+      "RS485",
+      "Modbus",
+      "TCP",
+      "ANALOG",
+      "ANALOG5V",
+      "ANALOG10V",
+      "DP",
+      "PROFINET",
+      "IP",
+      "CAT",
+      "BT",
+      "CCLINK",
+      "IO",
+      "WIFI"
+    ],
+    "protocols_basic": [
+      "RS232",
+      "RS485",
+      "Modbus"
+    ],
+    "protocols_extended": [
+      "TCP",
+      "ANALOG",
+      "ANALOG5V",
+      "ANALOG10V",
+      "DP",
+      "PROFINET",
+      "IP",
+      "CAT",
+      "BT",
+      "CCLINK",
+      "IO",
+      "WIFI"
+    ]
+  },
+  "fields": {
+    "common_required": [
+      "W1",
+      "material"
+    ],
+    "称重模块": [
+      "W1",
+      "W2",
+      "support",
+      "material",
+      "vibration"
+    ],
+    "平台秤": [
+      "W1",
+      "material",
+      "台面尺寸"
+    ],
+    "台秤": [
+      "W1",
+      "material",
+      "台面尺寸",
+      "安装形式"
+    ]
+  },
+  "field_semantics": {
+    "note": "COPA 契约字段的语义说明，只描述字段含义、单位与合法取值，不列举原文别名。原文说法与契约字段/枚举的对应关系由模型按语义自行推断；契约没列出的说法同样推断后交由 COPA 校验，校验不通过时保持缺失，不得因为没见过某种说法就拒绝映射。非契约列一律忽略。",
+    "fields": {
+      "item_type": {
+        "hint": "设备类型枚举：称重模块 / 台秤 / 平台秤。"
+      },
+      "quantity": {
+        "hint": "该条设备的数量，正整数。"
+      },
+      "W1": {
+        "unit": "kg",
+        "hint": "最大物料重量，kg 数值。"
+      },
+      "W2": {
+        "unit": "kg",
+        "hint": "设备自重，kg 数值，可为 0；仅称重模块需要。"
+      },
+      "台面尺寸": {
+        "hint": "长x宽，单位 mm；米/厘米换算成 mm。"
+      },
+      "material": {
+        "hint": "整机材质：碳钢 / 不锈钢 / 混合。"
+      },
+      "m_brand": {
+        "hint": "整单共用的秤体/传感器品牌短码，写在 quote，不在条目里。"
+      },
+      "c_brand": {
+        "hint": "整单共用的仪表/控制器品牌短码，写在 quote，不在条目里。"
+      },
+      "安装形式": {
+        "hint": "台秤安装形式：一体 / 分体。"
+      },
+      "分体仪表支架": {
+        "hint": "分体时的仪表支架枚举，按原文语义自行选择合法取值。"
+      },
+      "required_ex": {
+        "hint": "防爆等级枚举；原文只给『防爆』而未给具体等级时属于缺项。"
+      },
+      "power": {
+        "hint": "仪表电源，可选字段。"
+      }
+    },
+    "non_contract_columns": [
+      "序号",
+      "传感器材质",
+      "传感器等级/Y值",
+      "传感器数量",
+      "精度等级",
+      "分度值(e)",
+      "传感器接头",
+      "通讯接口",
+      "仪表是否需要I/O控制",
+      "立柱",
+      "防护等级",
+      "仪表与接线盒距离(m)",
+      "其他要求",
+      "单位"
+    ],
+    "optional_columns": [
+      "仪表安装方式",
+      "仪表电源",
+      "仪表是否防爆"
+    ],
+    "ignored_note": "non_contract_columns 只是常见示例，不是穷举：凡不属于 COPA 契约字段的原文列一律忽略，不追问、不请求确认、不填入 payload、也不当成缺失字段。optional_columns 对应可选字段：原文有明确值可按需填入，缺值不追问。"
+  },
+  "sources": {
+    "selection_rules": "config/selection_rules.json",
+    "parser_rules": "config/parser_rules.json",
+    "table_sizes": [
+      "平台秤通表.csv",
+      "台秤通表.csv"
+    ]
+  },
+  "schema_fingerprint": "b89d9237",
+  "payload_contract": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "COPA LLM quote payload",
+    "description": "LLM 只翻译已确认需求；unknown fields 由 COPA 警告并忽略，不参与选型。",
+    "type": "object",
+    "additionalProperties": true,
+    "required": [
+      "schema_version",
+      "origin",
+      "schema_fingerprint",
+      "quote",
+      "items"
+    ],
+    "properties": {
+      "schema_version": {
+        "type": "integer",
+        "const": 1
+      },
+      "origin": {
+        "type": "string",
+        "const": "llm"
+      },
+      "schema_fingerprint": {
+        "type": "string"
+      },
+      "quote": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "project",
+          "m_brand",
+          "c_brand",
+          "declared_count",
+          "confirmed_by_user"
+        ],
+        "properties": {
+          "project": {
+            "type": "string",
+            "minLength": 1
+          },
+          "m_brand": {
+            "type": "string",
+            "enum": [
+              "FT",
+              "AW"
+            ],
+            "description": "整份报价共用的秤体/传感器品牌短码。"
+          },
+          "c_brand": {
+            "type": "string",
+            "enum": [
+              "FT",
+              "AW",
+              "FAB"
+            ],
+            "description": "整份报价共用的仪表/控制器品牌短码。"
+          },
+          "quote_title": {
+            "type": "string",
+            "enum": [
+              "COPA A",
+              "COPA B"
+            ],
+            "description": "由程序按 m_brand 写死，不需要模型输出。"
+          },
+          "source": {
+            "type": "string"
+          },
+          "declared_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "confirmed_by_user": {
+            "const": true
+          }
+        }
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/item"
+        }
+      }
+    },
+    "$defs": {
+      "fields": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "W1": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "最大物料重量，kg 数值。"
+          },
+          "W2": {
+            "type": "number",
+            "minimum": 0,
+            "description": "设备自重，kg 数值，可为 0；仅称重模块需要。"
+          },
+          "support": {
+            "type": "integer",
+            "minimum": 3
+          },
+          "material": {
+            "type": "string",
+            "enum": [
+              "碳钢",
+              "不锈钢",
+              "混合"
+            ],
+            "description": "整机材质：碳钢 / 不锈钢 / 混合。"
+          },
+          "vibration": {
+            "type": "boolean"
+          },
+          "RPM": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "台面尺寸": {
+            "type": "string",
+            "pattern": "^\\s*\\d+(?:\\.\\d+)?\\s*(?:mm|cm|m|毫米|厘米|米)?\\s*[xX×*]\\s*\\d+(?:\\.\\d+)?\\s*(?:mm|cm|m|毫米|厘米|米)?\\s*$",
+            "description": "长x宽，单位 mm；米/厘米换算成 mm。"
+          },
+          "required_ex": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "二区IIBT4",
+                  "二区IICT5",
+                  "二区IICT6",
+                  "IIBT4",
+                  "IICT4",
+                  "IIBT5",
+                  "IICT5",
+                  "IIBT6",
+                  "IICT6"
+                ]
+              },
+              {
+                "const": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "防爆等级枚举；原文只给『防爆』而未给具体等级时属于缺项。"
+          },
+          "安装形式": {
+            "type": "string",
+            "enum": [
+              "一体",
+              "分体"
+            ],
+            "description": "台秤安装形式：一体 / 分体。"
+          },
+          "分体仪表支架": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "壁挂支架",
+                  "立杆支架",
+                  "壁挂",
+                  "立杆"
+                ]
+              },
+              {
+                "const": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "分体时的仪表支架枚举，按原文语义自行选择合法取值。"
+          },
+          "power": {
+            "type": "string",
+            "enum": [
+              "AC220V",
+              "DC24V"
+            ],
+            "description": "仪表电源，可选字段。"
+          },
+          "e_input": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^\\s*\\d+(?:\\.\\d+)?\\s*(?:kg|千克|公斤|g|克|t|吨)?\\s*$"
+              }
+            ]
+          },
+          "c_family": {
+            "type": "string"
+          },
+          "req_com1": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "RS232",
+                    "RS485",
+                    "Modbus"
+                  ]
+                }
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "RS232",
+                  "RS485",
+                  "Modbus",
+                  "RS232+RS485",
+                  "RS232+Modbus",
+                  "RS485+Modbus"
+                ]
+              }
+            ]
+          },
+          "req_com2": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "TCP",
+                    "ANALOG",
+                    "ANALOG5V",
+                    "ANALOG10V",
+                    "DP",
+                    "PROFINET",
+                    "IP",
+                    "CAT",
+                    "BT",
+                    "CCLINK",
+                    "IO",
+                    "WIFI"
+                  ]
+                }
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "TCP",
+                  "ANALOG",
+                  "ANALOG5V",
+                  "ANALOG10V",
+                  "DP",
+                  "PROFINET",
+                  "IP",
+                  "CAT",
+                  "BT",
+                  "CCLINK",
+                  "IO",
+                  "WIFI"
+                ]
+              }
+            ]
+          },
+          "special_req": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "special_req2": {
+            "type": "boolean"
+          }
+        }
+      },
+      "item": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "seq",
+          "item_type",
+          "quantity",
+          "flags",
+          "fields"
+        ],
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "item_type": {
+            "type": "string",
+            "enum": [
+              "称重模块",
+              "台秤",
+              "平台秤"
+            ],
+            "description": "设备类型枚举：称重模块 / 台秤 / 平台秤。"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "该条设备的数量，正整数。"
+          },
+          "flags": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "metrology",
+              "high_precision",
+              "ex",
+              "digital",
+              "onsite_service"
+            ],
+            "properties": {
+              "metrology": {
+                "type": "boolean"
+              },
+              "high_precision": {
+                "type": "boolean"
+              },
+              "ex": {
+                "type": "boolean"
+              },
+              "digital": {
+                "type": "boolean"
+              },
+              "onsite_service": {
+                "type": "boolean"
+              }
+            }
+          },
+          "fields": {
+            "$ref": "#/$defs/fields"
+          },
+          "note": {
+            "type": "string"
+          },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "basis": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "confirmed_nonstandard": {
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "flags"
+              ],
+              "properties": {
+                "flags": {
+                  "required": [
+                    "ex"
+                  ],
+                  "properties": {
+                    "ex": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "fields": {
+                  "required": [
+                    "required_ex"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "fields"
+              ],
+              "properties": {
+                "fields": {
+                  "required": [
+                    "vibration"
+                  ],
+                  "properties": {
+                    "vibration": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "fields": {
+                  "required": [
+                    "RPM"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "item_type"
+              ],
+              "properties": {
+                "item_type": {
+                  "const": "称重模块"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "fields": {
+                  "required": [
+                    "W1",
+                    "W2",
+                    "support",
+                    "material",
+                    "vibration"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "item_type"
+              ],
+              "properties": {
+                "item_type": {
+                  "const": "平台秤"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "fields": {
+                  "required": [
+                    "W1",
+                    "material",
+                    "台面尺寸"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "item_type"
+              ],
+              "properties": {
+                "item_type": {
+                  "const": "台秤"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "fields": {
+                  "required": [
+                    "W1",
+                    "material",
+                    "台面尺寸",
+                    "安装形式"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

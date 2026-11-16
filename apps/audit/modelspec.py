@@ -19,6 +19,7 @@ mtime 指纹判断是否失效）。现在只在进程内缓存，进程退出�
 一致。
 """
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -123,7 +124,37 @@ def _kind_from_family(family: str) -> str:
         return KIND_PLATFORM
     if fam.startswith(("FTBR", "AWBR")):
         return KIND_BENCH
+    if "过渡板" in (family or ""):
+        return KIND_ACCESSORY
     return KIND_UNKNOWN
+
+
+# 过渡板这类「一行多规格」的写法：详细型号列写 "SS 3t|SS 4.5t|SS 5t|SS 22.5t"，
+# 一行覆盖同材质的所有量程段；报价单写的是单个规格 "SS 2.5t"。
+# 精确比必然落空（2.5t 这一段本来就不存在，由 L34 另判），但**材质**写在规格
+# 前缀上（SS/CS），比「不锈钢材质 / 碳钢材质」这句话只需要这一位。所以按材质
+# 兜底：珠海 011226 的下安装过渡板 SS 2.5T 描述写「碳钢材质」，就是这么漏掉的。
+_RE_PLATE_SPEC = re.compile(r"^(CS|SS)\s*[\d.]+\s*t$", re.IGNORECASE)
+
+
+def _variants(name: str) -> List[str]:
+    return [part.strip() for part in str(name or "").split("|") if part.strip()]
+
+
+def _plate_row(descs: dict, text: str) -> Optional[dict]:
+    """单个过渡板规格 -> 同材质的那一行表（同规格优先，其次同材质任意规格）"""
+    if not _RE_PLATE_SPEC.match(text or ""):
+        return None
+    code = text.split()[0].upper()
+    best = None
+    for name, row in descs.items():
+        for variant in _variants(name):
+            if variant.split()[0].upper() != code:
+                continue
+            if C._squash(variant) == C._squash(text):
+                return row
+            best = best or row
+    return best
 
 
 def match_desc(catalog, model: str, prefix_ok: bool = True) -> Optional[dict]:
@@ -150,6 +181,12 @@ def match_desc(catalog, model: str, prefix_ok: bool = True) -> Optional[dict]:
     for name, row in descs.items():
         if C._squash(name) == key_sq:
             return row
+
+    # 一行多规格（"SS 3t|SS 4.5t|SS 5t|SS 22.5t"）：每个规格都是一个可用键
+    for name, row in descs.items():
+        for variant in _variants(name):
+            if C._squash(variant) == key_sq:
+                return row
 
     head = text.split()[0]
     if head != text:
@@ -185,7 +222,10 @@ def match_desc(catalog, model: str, prefix_ok: bool = True) -> Optional[dict]:
             common += 1
         if common > best_score:
             best, best_score = row, common
-    return best if best_score >= len(head_sq) else None
+    if best is not None and best_score >= len(head_sq):
+        return best
+    # 过渡板：表里只有「同材质各量程段」的合并行，按材质兜底
+    return _plate_row(descs, text)
 
 
 # ---------------------------------------------------------------------------

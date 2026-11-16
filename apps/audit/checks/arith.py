@@ -88,7 +88,7 @@ def _segment_totals(doc: QuoteDoc, sheet: str) -> List[Tuple["SummaryRow", Optio
     报价单的金额是分层的，明细行金额只是**单套**用量×单价：
         明细 ══ 小计 ══×套数══ 套数合计 ══Σ══ 设备合计
     少了中间那层，拿「明细之和」比设备合计会整整差一个套数倍率
-    （样例客户单 5 套：97,930 vs 489,650，误报 2 条 L17）。
+    （枧洋单 5 套：97,930 vs 489,650，误报 2 条 L17）。
 
     返回 [(小计行, 该段套数合计行或 None)]，按行序；每段以「下一个小计」为界。
     """
@@ -109,7 +109,7 @@ def _segment_totals(doc: QuoteDoc, sheet: str) -> List[Tuple["SummaryRow", Optio
 def check_summary(doc: QuoteDoc, rules) -> List:
     """b 层汇总核算（L17）：汇总行与明细金额之和不符（红，文件级）。
 
-    口径（样例客户单教训后的语义版）：
+    口径（枧洋单教训后的语义版）：
       subtotal（小计）    = 自上一条汇总行以来的区间明细之和（+区间内费用行）
       equipment（设备合计）= 明细金额之和（不含费用行）。先核本表，对不上再核
                             其他表的明细池——报价单的设备合计常直接引用汇总表
@@ -486,7 +486,7 @@ def check_formulas(doc: QuoteDoc, rules) -> List:
 
         # ---- 汇总行：只做 L18 SUM 作用域，不做 L19 一致性 -----------------
         # 汇总行角色各不相同（小计=SUM、套价=SUM×套数、服务费=数量×单价），
-        # 形态本来就该不同，放一组比「一致性」全是噪音（样例客户单教训）。
+        # 形态本来就该不同，放一组比「一致性」全是噪音（枧洋单教训）。
         last_row = 0
         for summary in sorted(summaries, key=lambda s: s.row):
             if summary.kind == "fee":

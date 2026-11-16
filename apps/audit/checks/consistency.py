@@ -10,12 +10,12 @@ import re
 
 from COPA.apps.audit import claims as C
 from COPA.apps.audit import modelspec
+from COPA.apps.audit.checks.extras import sensor_tokens
 from COPA.apps.audit.desclib import (MTL_TEXT, desc_capacity, desc_capacity_span,
-                                     desc_division, desc_division_kv,
-                                     desc_division_span, desc_ex, desc_face,
-                                     desc_face_span, desc_material,
-                                     desc_material_span, desc_note_line_spans,
-                                     desc_note_lines, material_kind)
+                                     desc_division, desc_division_span,
+                                     desc_ex, desc_face, desc_face_span,
+                                     desc_material, desc_material_span,
+                                     desc_note_line_spans, material_kind)
 from COPA.apps.audit.model import (KIND_BENCH, KIND_MODULE, KIND_NAMES,
                                    SCALE_KINDS)
 from COPA.apps.audit.naming import norm, tokenize_models
@@ -91,7 +91,7 @@ def check(item, catalog, rules):
     info = catalog.codes.decode(item.model) if item.model else None
     issues.extend(_remark_sensor(item, catalog, rules))
     issues.extend(_ex_instrument(item, catalog, rules))
-    issues.extend(_bench_note_line(item, rules))
+    issues.extend(_bench_note_line(item, catalog, rules))
     issues.extend(_division_unit(item, rules))
     if info is None:
         return issues
@@ -125,10 +125,10 @@ def _category_conflict(item, catalog, rules):
 def _capacity(item, info, catalog, rules):
     """L3：型号容量段 vs 描述量程"""
     found = desc_capacity_span(item.desc)
-    wanted = found[0] if found else None
     have = info.capacity_kg
-    if wanted is None or have is None or have <= 0:
+    if found is None or have is None or have <= 0:
         return []
+    wanted = found[0]
     if abs(wanted - have) <= max(0.001 * have, 0.01):
         return []
 
@@ -149,10 +149,10 @@ def _capacity(item, info, catalog, rules):
 def _face(item, info, catalog, rules):
     """L4：型号台面码 vs 描述台面尺寸"""
     found = desc_face_span(item.desc)
-    wanted = (found[0], found[1]) if found else None
     have = info.face_mm
-    if wanted is None or have is None:
+    if found is None or have is None:
         return []
+    wanted = (found[0], found[1])
     if _eq_size(wanted, have):
         return []
 
@@ -174,7 +174,9 @@ def _material(item, info, rules):
     """L5：型号材质段 vs 描述第一处「材质：」。描述含糊时跳过。"""
     expected = MTL_TEXT.get(info.material)
     found = desc_material_span(item.desc)
-    raw = found[0] if found else ""
+    if found is None:
+        return []          # 描述里没写材质：缺项交给 L25/L7，这里不判
+    raw, start, end = found
     actual = material_kind(raw)
     if not expected or not actual or expected == "混合材质" or actual == "混合材质":
         return []          # 描述自己就没说清（如「碳钢，不锈钢台面」），不判
@@ -186,7 +188,7 @@ def _material(item, info, rules):
         expected="{}（按型号 {}）".format(expected, info.material),
         actual="{}（按描述）".format(raw),
         anchor=item.cells.get("desc"),
-        span=(found[1], found[2]), field="材质")]
+        span=(start, end), field="材质")]
 
 
 
@@ -406,19 +408,50 @@ def _ex_example(catalog, row) -> str:
     return ""
 
 
-def _bench_note_line(item, rules):
-    """L14：台秤描述内出现「备注：」行——台秤默认仪表一体安装，备注行应省略。"""
+# 备注行里「本该写在报价单备注栏」的东西。只认这三类：品牌、金额、传感器型号。
+# 纯安装说明（「仪表分体安装，不含立柱」「仪表/立柱/秤体一体安装」）不报——
+# 那是有信息量的商务交代，和「把人手塞的型号/价码藏在描述里」是两件事。
+_RE_NOTE_BRAND = re.compile(r"(?:品牌|厂家|制造商|brand)\s*[:：]", re.I)
+_RE_NOTE_MONEY = re.compile(r"[¥￥]\s*\d|\d\s*元(?![/件器])|价格|单价|总价|金额", re.I)
+
+
+def _note_payload(line: str) -> list:
+    """备注行夹带了什么；空列表表示这行只是安装/结构说明，放过。"""
+    hits: list = []
+    if _RE_NOTE_BRAND.search(line):
+        hits.append("品牌")
+    if _RE_NOTE_MONEY.search(line):
+        hits.append("金额")
+    tokens = sensor_tokens(line)
+    if tokens:
+        hits.append("传感器型号 {}".format(tokens[0]))
+    return hits
+
+
+def _bench_note_line(item, catalog, rules):
+    """L14：台秤描述内的备注行夹带了该进备注栏的内容。
+
+    判据从「有备注行就报」收紧成「有夹带才报」：台秤默认一体安装，正常的
+    安装/交付说明写在描述里不算错（人手单大量这么写），真正的毛病是把传感器
+    型号、品牌、金额塞进描述——那些必须写报价单的备注栏，否则报价单一改版
+    就跟着丢。双语单子的英文段是中文的逐句翻译，两种写法同判。
+    """
     if item.kind != KIND_BENCH:
         return []
-    found = desc_note_line_spans(item.desc or "")
-    if not found:
+    flagged = []
+    for text, start, end in desc_note_line_spans(item.desc or ""):
+        payload = _note_payload(text)
+        if payload:
+            flagged.append((text, start, end, payload))
+    if not flagged:
         return []
-    text, start, end = found[0]
+    text, start, end, payload = flagged[0]
+    more = "" if len(flagged) == 1 else "（同类备注行共 {} 处）".format(len(flagged))
     return [rules.issue(
         "L14",
-        message="描述内出现备注行「{}」；台秤默认仪表一体安装，描述内的备注行应省略".format(
-            text[:50]),
-        expected="描述内无备注行（传感器型号写在备注栏）",
+        message="描述内备注行夹带了{}「{}」{}；这些写在报价单备注栏，不写进描述".format(
+            "、".join(payload), text[:50], more),
+        expected="描述内不夹带品牌/金额/传感器型号（写备注栏）",
         actual=text[:60],
         anchor=item.cells.get("desc"),
         span=(start, end), field="备注行")]
@@ -446,7 +479,7 @@ def _division_unit(item, rules):
 
 
 def _module_variant(item, catalog, rules):
-    """L21：模块型号带 L 后缀（水平拉杆变体）但描述未声明拉杆（样例客户案例：
+    """L21：模块型号带 L 后缀（水平拉杆变体）但描述未声明拉杆（枧洋案例：
     「52-30ML」的描述只写材质/防爆，没有「带水平拉杆」——带拉杆与不带拉杆
     是两种安装结构，照单发货到现场装不上）。只查型号→描述方向：
     描述提拉杆而型号不带 L 的写法未约定，不猜。"""

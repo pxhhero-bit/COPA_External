@@ -9,7 +9,7 @@ import re
 from collections.abc import Callable
 
 from PySide6.QtCore import QMimeData, Qt
-from PySide6.QtGui import QColor, QDrag, QPainter, QPen
+from PySide6.QtGui import QColor, QDrag, QPen
 from PySide6.QtWidgets import (QAbstractItemView, QMenu, QStyledItemDelegate,
                                QStyleOptionViewItem, QTreeWidget,
                                QTreeWidgetItem)

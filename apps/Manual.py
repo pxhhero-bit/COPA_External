@@ -27,8 +27,7 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel,
                                QListWidget, QPushButton, QScrollArea,
-                               QSizePolicy, QTabBar, QTextBrowser,
-                               QVBoxLayout, QWidget)
+                               QTabBar, QTextBrowser, QVBoxLayout, QWidget)
 
 from COPA.apps import app_icon
 

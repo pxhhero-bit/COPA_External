@@ -552,10 +552,8 @@ class ProgramDefaultTests(unittest.TestCase):
         self.assertIn("W_total", exported)
         self.assertIn("将进入选型流程", exported)
         self.assertNotIn("将进入报价生成流程", exported)
-        # llm/generated 是开发期生成物，不随对外版分发；有就比，没有跳过这半条
-        generated = ROOT / "llm" / "generated" / "prompt.txt"
-        if generated.is_file():
-            self.assertEqual(generated.read_text(encoding="utf-8"), exported)
+        self.assertEqual((ROOT / "llm" / "generated" / "prompt.txt").read_text(encoding="utf-8"),
+                         exported)
 
     def test_prompt_schema_is_compact_but_still_complete(self):
         """提示词里的 schema 可以压缩，但不能丢结构或取值信息。

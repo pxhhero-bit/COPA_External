@@ -26,33 +26,6 @@ EN_HEADERS = ["No.", "Item", "Model & Description", "Unit", "Qty",
               "Unit Price (USD)", "Total Price (USD)"]
 
 
-def _desc_is_placeholder():
-    """判断当前数据集是不是「占位描述」的示例集。
-
-    对外版只带脱敏示例数据，描述通表里写的是「这是……的产品描述。」这类
-    占位文案，没有真实描述原文。L25/L26 与型号快照断言全靠描述原文做比对，
-    示例集里没有输入源，只能跳过——不为了过测试去造数据。
-    """
-    import csv
-
-    from COPA.apps.audit import db as _db
-
-    path = os.path.join(_db.DATA_DIR, "description", "FT描述通表.csv")
-    try:
-        with open(path, encoding="utf-8-sig", newline="") as fh:
-            for row in csv.DictReader(fh):
-                return str(row.get("描述") or "").startswith("这是")
-    except OSError:
-        return False
-    return False
-
-
-DESC_PLACEHOLDER = _desc_is_placeholder()
-needs_desc_text = unittest.skipIf(
-    DESC_PLACEHOLDER,
-    "示例数据集的描述通表是占位文案，没有描述原文可供 L25/L26 比对")
-
-
 def issue_baseline(path, folder):
     """模拟「出报价」：给文件盖项目号，并把基线写进临时项目快照。
 
@@ -60,7 +33,6 @@ def issue_baseline(path, folder):
     """
     from openpyxl import load_workbook
 
-    from COPA.apps import Snapshot
     from COPA.apps.audit import pno
 
     wb = load_workbook(path)
@@ -277,11 +249,31 @@ case("L13_ex_instrument_mismatch", [[
     "台", 1, 0, 0,
 ]], ["L13"])
 
-# ---- L14 台秤描述内出现备注行 ------------------------------------------
+# ---- L14 台秤备注行夹带备注栏内容 ---------------------------------------
 case("L14_bench_note_line", [[
     "1", "电子台秤",
     _desc("FTBR-C-060-4050", capacity=60, face="400*500",
+          extra="备注：传感器型号 SB14-454kg-BH-C3，品牌：flintec。"),
+    "台", 1, 0, 0,
+]], ["L14"])
+
+# ---- L14 备注行只是安装说明：不算错 --------------------------------------
+# 台秤默认一体安装，人手单大量写「分体安装」「不含立柱」这类交付说明，
+# 那是有信息量的商务交代，不是把型号/价码藏进描述。判据只抓夹带。
+case("L14_bench_note_install_only", [[
+    "1", "电子台秤",
+    _desc("FTBR-C-060-4050", capacity=60, face="400*500",
           extra="备注：仪表分体安装，不含立柱。"),
+    "台", 1, 0, 0,
+]], [])
+
+# ---- L14 备注行（英文）--------------------------------------------------
+# 双语单子的英文段落是中文逐句翻译：中文版报的，英文版也得报，否则同一张单
+# 翻成英文就「干净」了（Juan-0602 三行都是中文备注 + 英文 Remarks 各一条）
+case("L14_bench_note_line_en", [[
+    "1", "电子台秤",
+    _desc("FTBR-C-060-4050", capacity=60, face="400*500",
+          extra="Remarks: Brand: flintec, sensor SB14-454kg-BH-C3."),
     "台", 1, 0, 0,
 ]], ["L14"])
 
@@ -292,8 +284,8 @@ case("L15_division_unit", [[
     "台", 1, 0, 0,
 ]], ["L15"])
 
-# ---- L21 模块拉杆变体：型号带 L（水平拉杆）描述必须声明（样例客户案例）--------
-# 版式按样例客户真实单：型号+传感器串在名称列，描述列首行重复型号
+# ---- L21 模块拉杆变体：型号带 L（水平拉杆）描述必须声明（枧洋案例）--------
+# 版式按枧洋真实单：型号+传感器串在名称列，描述列首行重复型号
 case("L21_pull_rod_missing", [[
     "1", "称重模块",
     "52-30ML CS SB14-3000kg-BH-C3 EX\n"
@@ -310,7 +302,7 @@ case("L21_pull_rod_ok", [[
 
 # 模块材质不由系列决定，由「系列 材质码 传感器型号」里的材质码决定：
 # 同一个 52-30ML 既有 CS（合金钢镀镍）也有 SS（304不锈钢）。取快照必须按
-# 详细型号，只拿系列会落到同系列任意一行——这就是样例客户单 L26 误报的根因。
+# 详细型号，只拿系列会落到同系列任意一行——这就是枧洋单 L26 误报的根因。
 case("L26_module_material_ss", [[
     "1", "称重模块",
     "52-30ML SS SB14-3000kg-BH-C3 EX\n"
@@ -327,7 +319,7 @@ case("L26_module_material_conflict", [[
 ]], ["L26"])
 
 # 汇总页聚合行：desc 即纯型号串（无中文，无独立描述）——不重复报 L21，
-# 拉杆声明以报价单明细描述为准（样例客户汇总页 6 行误报的锁定用例）
+# 拉杆声明以报价单明细描述为准（枧洋汇总页 6 行误报的锁定用例）
 case("L21_echo_summary_row", [[
     "1", "称重模块",
     "52-30ML CS SB14-3000kg-BH-C3 EX",
@@ -389,7 +381,7 @@ case("platform_bogus_face_still_l1u", [[
 ]], ["L1U"])
 
 # ---- 模块系列铁律：型号 = 模块系列+变体尾缀，传感器串只是配置 -------------
-# 样例客户单口径（用户拍板）：模块型号从模块通表系列校验，52-30ML -> 52-30M；
+# 枧洋单口径（用户拍板）：模块型号从模块通表系列校验，52-30ML -> 52-30M；
 # SB14-1134kg-BH-C3 是适配传感器不是型号，不该被抽去查库、更不该报 L1
 case("module_series_prefix", [[
     "1", "称重模块\n52-30ML CS SB14-1134kg-BH-C3 EX",
@@ -467,7 +459,7 @@ case("L17_qty_total_skip", [[
 ]], [])
 
 # L17 金额分层：明细(单套) ══ 小计 ══×套数══ 套数合计 ══Σ══ 设备合计。
-# 明细只有 100/套，套数 3 -> 设备合计 300；拿明细之和 100 去比会差 3 倍（样例客户单实测 5 倍）
+# 明细只有 100/套，套数 3 -> 设备合计 300；拿明细之和 100 去比会差 3 倍（枧洋单实测 5 倍）
 case("L17_segment_chain_ok", [[
     "1", "电子台秤",
     _desc("FTBR-C-060-4050", capacity=60, face="400*500"),
@@ -576,9 +568,6 @@ class AuditSeedTest(unittest.TestCase):
                 make_quote(path, rows, headers, merge)
                 report = audit_file(path)
                 got = {issue.code for issue in report.active_issues}
-                if DESC_PLACEHOLDER and expect and not got \
-                        and set(expect) <= {"L25", "L26"}:
-                    self.skipTest("示例数据集无描述原文，{} 无输入源".format(name))
                 self.assertEqual(expect, got,
                                  "{}: 期望 {} 实际 {}；明细={}".format(
                                      name, sorted(expect), sorted(got),
@@ -630,7 +619,7 @@ class AuditSeedTest(unittest.TestCase):
 
     def test_summary_unrecognized_formula_still_amount_checked(self):
         """汇总格是没把握的公式（SUMIF 等）：公式作用域交 a 层 L20 提示，
-        金额仍按「明细之和(+费用)」独立核算——样例客户单教训后的语义口径"""
+        金额仍按「明细之和(+费用)」独立核算——枧洋单教训后的语义口径"""
         from COPA.apps.audit.checks import arith
         from COPA.apps.audit.model import LineItem, QuoteDoc, SummaryRow
         from COPA.apps.audit.rules import get_rules
@@ -672,7 +661,7 @@ class AuditSeedTest(unittest.TestCase):
                          "总价与「明细+费用」不符必须报")
 
     def test_summary_equipment_cross_sheet(self):
-        """设备合计直接引用汇总表（样例客户案例）：本表明细对不上、他表明细
+        """设备合计直接引用汇总表（枧洋案例）：本表明细对不上、他表明细
         对上 -> 是跨表引用，不报；金额真错才报"""
         from COPA.apps.audit.checks import arith
         from COPA.apps.audit.model import LineItem, QuoteDoc, SummaryRow
@@ -819,9 +808,11 @@ class AuditSeedTest(unittest.TestCase):
         "缺少真实样本")
     def test_real_landa(self):
         """真实历史单（用户人工审核拍板的口径）：
-        L3 量程不符 + L9 旧码，且必须报出四条漏检——
-        L12 备注缺传感器型号 / L13 仪表不符合防爆需求 / L14 描述内多余备注行 /
-        L15 分度值单位建议"""
+        L3 量程不符 + L9 旧码，且必须报出三条漏检——
+        L12 备注缺传感器型号 / L13 仪表不符合防爆需求 / L15 分度值单位建议。
+
+        L14 不报：这单备注是「仪表分体安装，不含立柱」——纯交付说明，
+        没有夹带型号/品牌/金额，按 2.5 判据放过（原来一律报，是误伤）。"""
         path = os.path.join(
             _ROOT, "ref", "广州兰达不锈钢防爆电子台秤报价单03032026-flintec.xlsx")
         report = audit_file(path)
@@ -830,7 +821,7 @@ class AuditSeedTest(unittest.TestCase):
         self.assertIn("L9", codes)
         self.assertIn("L12", codes)
         self.assertIn("L13", codes)
-        self.assertIn("L14", codes)
+        self.assertNotIn("L14", codes, "纯安装说明不该报 L14")
         self.assertIn("L15", codes)
         self.assertEqual(1, len(report.doc.items))
 
@@ -867,7 +858,6 @@ class SnapshotEngineTest(unittest.TestCase):
         steel = C.extract("材质：不锈钢")
         self.assertFalse(C.compatible(carbon[C.K_SCALE_MTL], steel[C.K_SCALE_MTL]))
 
-    @needs_desc_text
     def test_snapshot_module_pull_rod(self):
         """52-30ML 的型谱标准描述必须带出「带水平拉杆」"""
         from COPA.apps.audit import modelspec as S
@@ -889,7 +879,27 @@ class SnapshotEngineTest(unittest.TestCase):
         self.assertIsNone(S.get(cat, "FTPD-S-030-0808-E"))      # 通表无
         self.assertIsNone(S.get(cat, "FTBR-C-060-4050"))        # 秤体通表无
 
-    @needs_desc_text
+    def test_detail_model_keeps_y_value(self):
+        """传感器的 Y 值是选型区分项（同型号不同 Y 在通表里是两行），
+        「详细型号」必须把它带上；它不是价格，也不是可以随手丢掉的尾巴。"""
+        from COPA.apps.audit.reader import _detail_model
+        self.assertEqual(
+            "52-30ML SS SB14-3000kg-BH-C3 Y=11500",
+            _detail_model("52-30ML SS SB14-3000kg-BH-C3 Y=11500 品牌：flintec",
+                          "52-30ML"))
+
+    def test_y_value_lookup(self):
+        """带 Y 与不带 Y 都要能查到同一行标准描述（报价单不一定写 Y）"""
+        from COPA.apps.audit import modelspec as S
+        from COPA.apps.audit.db import Catalog
+        cat = Catalog.get()
+        with_y = S.get(cat, "52-30ML SS SB14-3000kg-BH-C3 Y=23000")
+        without = S.get(cat, "52-30ML SS SB14-3000kg-BH-C3")
+        self.assertIsNotNone(with_y)
+        self.assertIsNotNone(without)
+        assert with_y is not None and without is not None
+        self.assertEqual(with_y.std_desc, without.std_desc)
+
     def test_diff_missing_pull_rod(self):
         path = os.path.join(self.tmp, "diff_pull_rod.xlsx")
         make_quote(path, [[
@@ -902,7 +912,6 @@ class SnapshotEngineTest(unittest.TestCase):
         self.assertEqual(["L25"], [i.code for i in issues])
         self.assertEqual("red", issues[0].level, "型号蕴含项漏写判红")
 
-    @needs_desc_text
     def test_diff_embedded_instrument_power(self):
         """秤体行描述里带的仪表型号，也要按它自己的快照比供电"""
         path = os.path.join(self.tmp, "diff_embedded.xlsx")
@@ -917,7 +926,6 @@ class SnapshotEngineTest(unittest.TestCase):
         codes = {i.code for i in audit_file(path).active_issues}
         self.assertIn("L26", codes)
 
-    @needs_desc_text
     def test_embedded_model_must_match_exactly(self):
         """描述里夹带的型号按完整写法认，不能拿族名前缀去配无关配置行.
 
@@ -1089,7 +1097,7 @@ class SnapshotQtyTest(unittest.TestCase):
 class ProjectNoStampTest(unittest.TestCase):
     """项目号落点：A 列倒数第二行，1 号白字，不加批注，不改变表尾行数.
 
-    真实模板（COPA B/样例客户）底部 B 列本来就有说明文字，按整行判空会让每次盖号
+    真实模板（COPA B/枧洋）底部 B 列本来就有说明文字，按整行判空会让每次盖号
     都多长一行，「倒数第二行」就变成「新加的最后一行」——位置约定失效。
     """
 
@@ -1423,6 +1431,48 @@ class PlateTest(unittest.TestCase):
         ])
         self.assertFalse([c for c in codes if c[0] == "L1M"])
 
+    def test_plate_material_from_merged_row(self):
+        """珠海 011226 的 G72：SS 2.5T 这一段表里根本没有（L34 已判），
+        但材质是「不锈钢过渡板」整行覆盖的——不能因为量程段不存在就跳过材质，
+        否则上安装板报了 L26、下安装板静默通过。"""
+        from types import SimpleNamespace
+
+        from COPA.apps.audit import modelspec as S
+        from COPA.apps.audit.checks import descdiff
+        from COPA.apps.audit.db import Catalog
+        from COPA.apps.audit.rules import get_rules
+
+        cat = Catalog.get()
+        snap = S.get(cat, "SS 2.5t")
+        self.assertIsNotNone(snap, "过渡板应按材质兜底")
+        assert snap is not None
+        self.assertEqual("accessory", snap.kind)
+        self.assertIn("不锈钢", snap.std_desc)
+
+        item = SimpleNamespace(
+            model="SS 2.5t", model_detail="", model_text="", kind="accessory",
+            row=72, cells={"desc": (72, 7)},
+            desc="碳钢材质，表面处理后镀锌，含整套高强度螺丝。")
+        codes = [i.code for i in descdiff.diff(item, snap, get_rules(), cat)]
+        self.assertEqual(["L26"], codes)
+
+    def test_plate_material_consistent_silent(self):
+        """同一行是对的写法（SS 板 + 不锈钢材质）时不许报"""
+        from types import SimpleNamespace
+
+        from COPA.apps.audit import modelspec as S
+        from COPA.apps.audit.checks import descdiff
+        from COPA.apps.audit.db import Catalog
+        from COPA.apps.audit.rules import get_rules
+
+        cat = Catalog.get()
+        snap = S.get(cat, "SS 3t")
+        item = SimpleNamespace(
+            model="SS 3t", model_detail="", model_text="", kind="accessory",
+            row=10, cells={"desc": (10, 7)},
+            desc="不锈钢材质，含整套高强度螺丝。")
+        self.assertEqual([], descdiff.diff(item, snap, get_rules(), cat))
+
 
 class CableTest(unittest.TestCase):
     """L32：只比单据上显式写的长度，不按台数折算总长"""
@@ -1571,8 +1621,13 @@ class HeaderBaselineTest(unittest.TestCase):
             self.assertEqual("cell", issue.span_scope,
                              "抬头区间是相对锚点格的，不能当 desc 坐标再平移")
             ws = load_workbook(self.last_path).active
-            text = str(ws.cell(issue.anchor[0], issue.anchor[1]).value)
-            self.assertEqual(expect, text[issue.span[0]:issue.span[1]],
+            assert ws is not None
+            anchor, span = issue.anchor, issue.span
+            self.assertIsNotNone(anchor, "抬头问题必须带锚点")
+            self.assertIsNotNone(span, "抬头问题必须带区间")
+            assert anchor is not None and span is not None
+            text = str(ws.cell(anchor[0], anchor[1]).value)
+            self.assertEqual(expect, text[span[0]:span[1]],
                              "抬头问题标错了字：{}".format(issue.message))
 
     def test_only_total_weight_skips(self):

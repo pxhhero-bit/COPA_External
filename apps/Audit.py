@@ -23,7 +23,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIcon
-from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QLabel,
+from PySide6.QtWidgets import (QAbstractItemView, QFileDialog,
                                QMessageBox, QTableWidgetItem, QWidget)
 
 from COPA.apps.Ui_audit import Ui_AuditDialog
@@ -315,7 +315,6 @@ class AuditPanel(QWidget, Ui_AuditDialog):
                                     "\x1f".join((str(sheet), str(row_no), str(label))))
         table.setSortingEnabled(True)
 
-        counts = report.item_counts
         if report.passed:
             self.statLabel.setText("{}：未发现问题（未识别行 {}）".format(
                 summarize(report), len(report.doc.unrecognized)))

@@ -29,7 +29,6 @@ from datetime import datetime
 from typing import Any, cast
 
 from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter
 
 # 数据根目录：冻结打包后 data/template/output 随 exe 同目录手动摆放(保持源码结构)，
 # 源码运行时按 Writer 自身位置上溯定位
@@ -1217,7 +1216,6 @@ def build_section_header(item, lang="zh"):
     p_type = item["type"]
     h = item.get("header") or {}
     qty = item.get("qty")
-    instrument = _header_instrument(h, lang)
 
     if p_type == "module":
         support = item.get("support")
@@ -1812,7 +1810,6 @@ def _write_multi(items, out_path, service=False, lang="zh"):
         row = r_sum + 2
 
     # 6) 备注区(备注头 + 备注，行数随模板)平移重写
-    note_start = row
     _write_row(ws, row, protos[r_total_src + 1], {})
     ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=7)
     row += 1

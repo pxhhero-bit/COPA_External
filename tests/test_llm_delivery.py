@@ -30,11 +30,6 @@ def must(value):
 
 
 class GeneratedArtifactTests(unittest.TestCase):
-    # llm/generated 是开发期生成物，不随对外版分发；现场可用
-    # cli_quote.export_generated 重新导出后再跑这条比对。
-    @unittest.skipUnless(
-        (ROOT / "llm" / "generated" / "prompt.txt").is_file(),
-        "未随包分发 llm/generated 生成物")
     def test_runtime_prompt_and_schema_match_generated_files(self):
         self.assertEqual(
             (ROOT / "llm" / "generated" / "prompt.txt").read_text(encoding="utf-8"),

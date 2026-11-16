@@ -729,7 +729,6 @@ def main(argv: Sequence[str] | None = None, *, session_root: Any = None) -> int:
         return EXIT_CONTRACT
 
     try:
-        from COPA.apps.contract import validate_payload
         from COPA.apps.llm_io import load_payload
         payload = load_payload(args.input)
     except Exception as exc:

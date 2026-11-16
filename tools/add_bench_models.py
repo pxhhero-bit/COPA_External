@@ -9,8 +9,6 @@
 """
 import csv
 import os
-import re
-from typing import List
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(ROOT, "data", "台秤通表.csv")

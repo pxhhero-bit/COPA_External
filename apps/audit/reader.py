@@ -8,7 +8,6 @@
 原则：**宁可不认，也不硬塞**。归不了类的行进 doc.unrecognized 并出 L10，
 不允许静默跳过——报价单少读一行，批阅就成了假通过。
 """
-import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -17,8 +16,7 @@ from openpyxl import load_workbook
 from COPA.apps.audit.model import (KIND_ACCESSORY, KIND_BENCH, KIND_CABLE,
                                    KIND_INSTRUMENT, KIND_JBOX, KIND_MODULE,
                                    KIND_PLATFORM, KIND_SENSOR, KIND_TRUCK,
-                                   KIND_UNKNOWN, ROW_BLOCK, ROW_DETAIL,
-                                   ROW_SUMMARY, ROW_UNRECOGNIZED, LineItem,
+                                   KIND_UNKNOWN, LineItem,
                                    QuoteDoc, QtyTotalRow, SummaryRow,
                                    UnrecognizedRow)
 from COPA.apps.audit.naming import in_parens, norm, tokenize_models
@@ -450,7 +448,7 @@ def _read_sheet(ws, ranges, header_row: int, colmap: Dict[str, int],
                         or seq_key.upper() in _EN_SEQ_NUMS
                         or re.fullmatch(r"[A-Za-z]{1,2}", seq_key)):
             if name or desc:
-                # 段号会重复（样例客户同一页有两段都叫「四」：设备段 + 4 通道仪表段），
+                # 段号会重复（枧洋同一页有两段都叫「四」：设备段 + 4 通道仪表段），
                 # key 撞了就会把两段的明细/电缆并成一段，下游按段校验全乱。
                 block = seq.strip()
                 if any(b.key == block and b.sheet == ws.title for b in doc.blocks):

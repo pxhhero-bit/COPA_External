@@ -356,13 +356,15 @@ def _checklist_m_brand():
 
     from COPA.apps.Checklist import QuoteListItem
 
-    QApplication.instance() or QApplication([])
+    # 造一个 QApplication 上下文就够用，返回值不需要留（Qt 自己要一份实例）
+    QApplication.instance() or QApplication([])  # pyright: ignore[reportUnusedExpression]
     item = QuoteListItem()
     item.label_ID.setText("1")
     item._params = {"m_brand": "AW"}
     item._result = {"item_type": "platform", "platform": []}
     item.comboBox.setCurrentText("平台秤")
     project, _warnings = item.build_item()
+    assert project is not None
 
     if project.get("m_brand") != "AW":
         raise RuntimeError("项目字典未带 m_brand：{}".format(project))

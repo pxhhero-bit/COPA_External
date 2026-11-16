@@ -18,7 +18,7 @@ if PKG_PARENT not in sys.path:
     sys.path.insert(0, PKG_PARENT)
 
 from COPA.apps.llm_io import load_payload
-from COPA.cli_quote import _failure_reason, _safe_project_name, _session_dir, main
+from COPA.cli_quote import _failure_reason, _session_dir, main
 
 
 class LlmIoTests(unittest.TestCase):

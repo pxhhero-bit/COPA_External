@@ -11,7 +11,6 @@
   · 红/橙 run 用与 annotate 同一套色值（FFC00000 / FFE36C09），不看 run 有没有 b；
   · 只画有红/橙 run 的格，避免出一张看不出重点的大图。
 """
-import os
 from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence, Tuple
 
@@ -48,9 +47,9 @@ class CellView:
     after: List[Tuple[str, Optional[str]]]
 
 
-def _font(path: str, size: int) -> ImageFont.FreeTypeFont:
+def _font(path: Optional[str], size: int) -> ImageFont.FreeTypeFont:
     try:
-        return ImageFont.truetype(path, size * SCALE)
+        return ImageFont.truetype(path or _UI_FONT, size * SCALE)
     except OSError:
         return ImageFont.truetype(_UI_FONT, size * SCALE)
 
@@ -131,8 +130,9 @@ def collect(original: str, annotated: str,
                         continue
                 elif not _has_mark(cell.value):
                     continue
-                before = _runs(wb_o[ws.title][cell.coordinate].value) \
-                    if ws.title in wb_o.sheetnames else [("", None)]
+                before: List[Tuple[str, Optional[str]]] = (
+                    _runs(wb_o[ws.title][cell.coordinate].value)
+                    if ws.title in wb_o.sheetnames else [("", None)])
                 views.append(CellView(ws.title, cell.coordinate,
                                       before, _runs(cell.value)))
     return views
@@ -232,6 +232,6 @@ def render(views: List[CellView], out_png: str, width: int = 1080,
 
     y += PAD * SCALE
     img = img.crop((0, 0, width * SCALE, min(canvas_h, y)))
-    img = img.resize((width, img.height // SCALE), Image.LANCZOS)
+    img = img.resize((width, img.height // SCALE), Image.Resampling.LANCZOS)
     img.save(out_png)
     return out_png

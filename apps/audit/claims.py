@@ -20,8 +20,7 @@ from typing import Dict, Optional, Tuple
 
 from COPA.apps.audit import descfield
 from COPA.apps.audit.desclib import (desc_capacity_span, desc_division_span,
-                                     desc_ex, desc_face_span, desc_material,
-                                     material_kind)
+                                     desc_ex, desc_face_span)
 
 # ---- 规范键 ---------------------------------------------------------------
 K_SENSOR_MTL = "sensor_material"        # 传感器材质（模块行）

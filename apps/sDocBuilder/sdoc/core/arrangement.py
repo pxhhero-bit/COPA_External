@@ -7,7 +7,6 @@
 
 编排稿 md 约定：章节标题行前缀「#」数量=层级；块行「- ref | 标题」。
 """
-from sdoc.core.library_store import KIND_LABEL
 
 
 def default_template(store, project, brand=""):

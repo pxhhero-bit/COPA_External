@@ -1,5 +1,4 @@
 """Internal dialog -> in-memory selection -> original Checklist integration."""
-import copy
 import json
 import os
 import sys

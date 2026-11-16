@@ -24,7 +24,6 @@ if _ROOT not in sys.path:
 
 from COPA.apps.audit.annotate import (annotate_workbook_ex,   # noqa: E402
                                       AuditExportError, _insert_placeholders)
-from COPA.apps.audit.model import LEVEL_RED, LEVEL_YELLOW     # noqa: E402
 from COPA.apps.audit.report import annotate_filename          # noqa: E402
 from COPA.apps.audit.runner import audit_file                 # noqa: E402
 
@@ -142,6 +141,73 @@ def _font_of(ws, row, col):
 def _fill_of(ws, row, col):
     fill = ws.cell(row, col).fill
     return None if fill is None or fill.fill_type is None else fill.start_color.rgb
+
+
+def _colored_runs(ws, row, col, rgb=FONT_RED):
+    """富文本里真正标了这个色的片段（纯 str 段没有字体，不算）"""
+    value = ws.cell(row, col).value
+    if not isinstance(value, CellRichText):
+        return []
+    out = []
+    for block in value:
+        font = getattr(block, "font", None)
+        color = getattr(font, "color", None) if font is not None else None
+        if color is None or getattr(color, "rgb", None) != rgb:
+            continue
+        if str(block).strip():
+            out.append(str(block))
+    return out
+
+
+class NoteLineMarkTest(unittest.TestCase):
+    """L14 双语单：备注行夹带型号/品牌时，中文「备注：」与英文「Remarks:」
+    两行都标（黄），型号行与参数行不连坐"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp(prefix="audit_note_")
+        wb = Workbook()
+        ws = wb.active
+        assert ws is not None
+        ws.title = "报价单"
+        for col, text in enumerate(HEADERS, 1):
+            ws.cell(1, col, text)
+        ws.cell(2, 1, "1")
+        ws.cell(2, 2, "电子台秤")
+        ws.cell(2, 3, "型号：FTBR-C-060-4050\n电子台秤\n"
+                      "1.材质：碳钢，花纹钢台面；\n"
+                      "2.台面尺寸：400*500mm；\n"
+                      "3.量程：60kg，分度值e=d=20g，精度等级C3；\n"
+                      "4.称重传感器*1；品牌：flintec\n"
+                      "5.供电：内置电池，含充电器；\n"
+                      "备注：传感器型号 SB14-454kg-BH-C3，品牌：flintec。\n"
+                      "Remarks: Sensor SB14-454kg-BH-C3, Brand: flintec.")
+        ws.cell(2, 4, "台")
+        ws.cell(2, 5, 1)
+        ws.cell(2, 6, 100)
+        ws.cell(2, 7, "=E2*F2")
+        cls.src = os.path.join(cls.tmp, "双语备注.xlsx")
+        wb.save(cls.src)
+        cls.result = annotate_workbook_ex(
+            audit_file(cls.src), os.path.join(cls.tmp, "out"))
+        cls.ws = load_workbook(cls.result.path, rich_text=True)["报价单"]
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_both_languages_marked(self):
+        marks = _colored_runs(self.ws, 2, 3, rgb=FONT_ORANGE)
+        self.assertTrue(any("备注：" in text for text in marks),
+                        "中文备注行要标黄：{}".format(marks))
+        self.assertTrue(any("Remarks:" in text for text in marks),
+                        "英文 Remarks 行也要标黄（否则同一张单翻成英文就干净了）：{}".format(marks))
+
+    def test_model_and_params_not_marked(self):
+        marks = _colored_runs(self.ws, 2, 3, rgb=FONT_ORANGE)
+        for token in ("FTBR-C-060-4050", "量程", "材质"):
+            self.assertFalse(any(token in text for text in marks),
+                             "「{}」不该跟着备注行连坐：{}".format(token, marks))
 
 
 class AnnotateTest(unittest.TestCase):

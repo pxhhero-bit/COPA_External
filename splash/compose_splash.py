@@ -75,7 +75,7 @@ EYEBROW = "M E A S U R E  ·  S E L E C T  ·  Q U O T E"
 SUBTITLE = "工业称重设备  选型与报价系统"
 TAGS = "称重模块 · 台秤 · 平台秤 · 汽车衡"
 STATUS = "正在加载产品库与选型规则…"
-VERSION = "v1.41 Beta"
+VERSION = "v1.42"
 
 
 def _center_crop(pix, w, h):

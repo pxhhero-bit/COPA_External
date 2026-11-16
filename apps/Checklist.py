@@ -24,8 +24,7 @@ from typing import Callable
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog,
-                               QLabel, QMessageBox, QPushButton, QVBoxLayout,
-                               QWidget)
+                               QLabel, QMessageBox, QVBoxLayout, QWidget)
 
 from COPA.apps import Writer, app_icon
 from COPA.apps.Ui_quoteChecklist import Ui_quoteChecklist

@@ -13,7 +13,7 @@ if _PROJECT_ROOT not in sys.path:
 
 from PySide6.QtCore import Qt, QSettings, QTimer, Signal
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPlainTextEdit, QPushButton, QCheckBox, QMessageBox
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QMessageBox
 
 from COPA.engine import engine
 from COPA.apps import app_icon

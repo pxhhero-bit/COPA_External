@@ -308,11 +308,8 @@ class ProgramFlagTests(unittest.TestCase):
         item = contract.print_schema()["payload_contract"]["$defs"]["item"]
         self.assertIn("flags", item["required"])
         self.assertIn("flags", item["properties"])
-        generated = ROOT / "llm" / "generated" / "prompt.txt"
-        # llm/generated 是开发期生成物，不随对外版分发；有就比，没有跳过这半条
-        if generated.is_file():
-            self.assertEqual(generated.read_text(encoding="utf-8"),
-                             contract.print_prompt())
+        generated = (ROOT / "llm" / "generated" / "prompt.txt").read_text(encoding="utf-8")
+        self.assertEqual(generated, contract.print_prompt())
 
     def test_reset_clears_the_ex_gate(self):
         session = self._session(ChatReply("第一轮"))

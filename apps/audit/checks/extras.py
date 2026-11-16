@@ -20,8 +20,8 @@ import re
 from collections import defaultdict
 from typing import Dict, List, Tuple
 
-from COPA.apps.audit.model import (KIND_BENCH, KIND_CABLE, KIND_MODULE,
-                                  KIND_PLATFORM, LEVEL_RED, LEVEL_YELLOW)
+from COPA.apps.audit.model import (KIND_CABLE, KIND_MODULE, KIND_PLATFORM,
+                                   LEVEL_RED, LEVEL_YELLOW)
 from COPA.apps.audit.naming import tokenize_models
 
 # ---- 电缆 -----------------------------------------------------------------
@@ -130,7 +130,7 @@ def check_doc(doc, catalog, rules) -> Tuple[Dict[Tuple[str, int], List], List]:
         if item.kind == KIND_CABLE or "电缆" in (item.name or ""):
             cables[(item.sheet, item.block)].append(item)
 
-    # 多通道方案：整单里出现「4 通道 / 多通道」的段（样例客户那种末段是 4 通道
+    # 多通道方案：整单里出现「4 通道 / 多通道」的段（枧洋那种末段是 4 通道
     # 仪表的单子），电缆按每套 20 米算。按段判不够——多通道体现在仪表段而不是
     # 模块段的标题里。
     multi_doc = any(_MULTI_CHANNEL.search(t) for t in titles.values())

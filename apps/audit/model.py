@@ -142,16 +142,16 @@ class LineItem:
         if not code:
             return None
         first = None
-        for field in ("model", "name", "desc"):
-            anchor = self.cells.get(field)
+        for key in ("model", "name", "desc"):
+            anchor = self.cells.get(key)
             if not anchor:
                 continue
             if first is None:
                 first = (anchor, None)
-            at = self.cell_text(field).find(code)
+            at = self.cell_text(key).find(code)
             if at < 0:
                 # 型号常被规整过（SS 7.5T -> SS 7.5t），逐字找不到就忽略大小写
-                match = re.search(re.escape(code), self.cell_text(field), re.IGNORECASE)
+                match = re.search(re.escape(code), self.cell_text(key), re.IGNORECASE)
                 at = match.start() if match else -1
             if at >= 0:
                 return anchor, (at, at + len(code))
@@ -185,7 +185,7 @@ class Block:
     """项目段（多项目报价单里的一/二/三）。单项目单只有一段，key 为空。
 
     header_text 是「条目抬头」全文：段标题那一格 + 紧跟其后的续行（各家写法
-    不同，阿根廷把「3支点，共1套。料重…」单独写一行，样例客户则全塞在标题格里）。
+    不同，阿根廷把「3支点，共1套。料重…」单独写一行，枧洋则全塞在标题格里）。
     抬头是这一段的规格声明，L35–L38 拿它当基线，所以原文要完整留着。
     """
     key: str
@@ -244,7 +244,7 @@ class QtyTotalRow:
          用量**，总用量 = 套数 × 单套用量；
       2) 金额链：它的金额列就是「小计 × 套数」的整段价，设备合计 = Σ 段价。
          少了这一层，拿「明细之和」去比设备合计会差出一整个套数倍率
-         （样例客户单实测差 5 倍）。
+         （枧洋单实测差 5 倍）。
     """
     sheet: str
     row: int

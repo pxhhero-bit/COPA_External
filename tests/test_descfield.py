@@ -24,6 +24,33 @@ BENCH_DESC = (
 HEADER_DESC = "设备名称：1T模块，3支点，共8套。仪表，Profibus-DP通信，DC24V。防爆环境。"
 
 
+# ---- 测试小工具 -----------------------------------------------------------
+# 这几个取不到就等于用例失败：既省掉每处的 assertIsNotNone，也让类型检查知道
+# 后面拿到的一定不是 None（否则 Optional 的成员访问会一路飘红）。
+def _first(doc, name):
+    clause = doc.first(name)
+    assert clause is not None, "描述里没有「{}」".format(name)
+    return clause
+
+
+def _locate(doc, snippet):
+    span = doc.locate(snippet)
+    assert span is not None, "原文里定位不到「{}」".format(snippet)
+    return span
+
+
+def _claim_span(src, key):
+    span = C.extract(src)[key].span
+    assert span is not None, "{} 没有区间".format(key)
+    return span
+
+
+def _placed(cmap, span):
+    found = cmap.locate(span)
+    assert found is not None, "区间 {} 落在拼接文本之外".format(span)
+    return found
+
+
 class FieldTreeTest(unittest.TestCase):
     def test_every_clause_span_slices_to_its_value(self):
         """所有样本：clause.span 切出来必须等于 clause.value（不差一个字符）"""
@@ -41,12 +68,12 @@ class FieldTreeTest(unittest.TestCase):
         self.assertIn("量程", names)
         self.assertIn("分度值", names)
         # 「材质：碳钢，花纹钢台面」里的逗号不是新字段，不切
-        material = doc.first("材质")
+        material = _first(doc, "材质")
         self.assertIn("花纹钢台面", material.value)
 
     def test_sequence_number_kept_but_excluded_from_value(self):
         doc = descfield.parse(BENCH_DESC)
-        material = doc.first("材质")
+        material = _first(doc, "材质")
         self.assertEqual(material.no, "1")
         self.assertEqual(material.value, "碳钢，花纹钢台面")
 
@@ -59,13 +86,12 @@ class FieldTreeTest(unittest.TestCase):
 
     def test_line_numbers(self):
         doc = descfield.parse(BENCH_DESC)
-        self.assertEqual(doc.first("量程").line, 2)      # 第三行（0-based）
-        self.assertEqual(doc.first("材质").line, 0)
+        self.assertEqual(_first(doc, "量程").line, 2)      # 第三行（0-based）
+        self.assertEqual(_first(doc, "材质").line, 0)
 
     def test_locate_tolerates_whitespace(self):
         doc = descfield.parse("模块附件材质：合金钢 镀镍；")
-        span = doc.locate("合金钢镀镍")
-        self.assertIsNotNone(span)
+        span = _locate(doc, "合金钢镀镍")
         self.assertEqual(span.text("模块附件材质：合金钢 镀镍；").replace(" ", ""),
                          "合金钢镀镍")
 
@@ -77,11 +103,10 @@ class FieldTreeTest(unittest.TestCase):
 
 class ClaimSpanTest(unittest.TestCase):
     def _assert_span(self, src, key, expect):
-        claim = C.extract(src)[key]
-        self.assertIsNotNone(claim.span, "{} 没有区间".format(key))
-        self.assertEqual(claim.span[0], src.find(expect),
+        span = _claim_span(src, key)
+        self.assertEqual(span[0], src.find(expect),
                          "{} 的起点不对".format(key))
-        self.assertEqual(src[claim.span[0]:claim.span[1]], expect)
+        self.assertEqual(src[span[0]:span[1]], expect)
 
     def test_material_span_is_the_value_only(self):
         # 模块附件材质：合金钢镀镍 -> 只标「合金钢镀镍」，不连「模块附件材质：」
@@ -102,8 +127,8 @@ class ClaimSpanTest(unittest.TestCase):
     def test_protocol_span_is_first_hit_only(self):
         """协议可能在不同行各写一次；区间取第一处，不能 min..max 圈住整段"""
         src = "仪表，RS485通信\n备用，RS232通信"
-        claim = C.extract(src)[C.K_PROTOCOL]
-        self.assertEqual(src[claim.span[0]:claim.span[1]], "RS485")
+        span = _claim_span(src, C.K_PROTOCOL)
+        self.assertEqual(src[span[0]:span[1]], "RS485")
 
     def test_line_number_from_tree(self):
         claim = C.extract(BENCH_DESC)[C.K_CAPACITY]
@@ -113,6 +138,8 @@ class ClaimSpanTest(unittest.TestCase):
         doc = C.parse_doc(BENCH_DESC)
         value, raw, span = doc.fields[C.K_CAPACITY]
         self.assertEqual(raw, "1000kg")
+        self.assertIsNotNone(span)
+        assert span is not None          # 字段树允许「知值不知位」，这里收窄给类型检查
         self.assertEqual(span.text(BENCH_DESC), "1000kg")
 
 
@@ -137,9 +164,9 @@ class HeaderTreeTest(unittest.TestCase):
     def test_bare_value_without_colon(self):
         """抬头常写「总重8t，标定量程6t」——没有冒号也要认成字段"""
         doc = descfield.parse("料重3t，总重8t，标定量程6t")
-        self.assertEqual("3t", doc.first("料重").value)
-        self.assertEqual("8t", doc.first("总重").value)
-        self.assertEqual("6t", doc.first("标定量程").value)
+        self.assertEqual("3t", _first(doc, "料重").value)
+        self.assertEqual("8t", _first(doc, "总重").value)
+        self.assertEqual("6t", _first(doc, "标定量程").value)
 
     def test_weight_does_not_steal_the_total(self):
         """「设备自重及料合共总重3t」：这 3t 是总重，不能读成皮重"""
@@ -151,16 +178,16 @@ class HeaderTreeTest(unittest.TestCase):
         pieces = [(14, 2, "一、模块方案"), (15, 2, "3支点，共1套。料重：3t，总重4t")]
         cmap = descfield.CellMap.build(pieces)
         doc = descfield.parse(cmap.text)
-        clause = doc.first("料重")
-        self.assertEqual((15, 2), cmap.locate(clause.span)[:2])
-        row, col, local = cmap.locate(clause.span)
+        clause = _first(doc, "料重")
+        self.assertEqual((15, 2), _placed(cmap, clause.span)[:2])
+        row, col, local = _placed(cmap, clause.span)
         self.assertEqual("3t", pieces[1][2][local[0]:local[1]])
 
     def test_cellmap_prefers_given_text(self):
         """给了 header_text 就以它为准：拼接时被改写过的空白不会让整段落错位"""
         cmap = descfield.CellMap.build([(3, 2, "a b"), (4, 2, "c")], text="a  b\nc")
         self.assertEqual("a  b\nc", cmap.text)
-        self.assertEqual((4, 2), cmap.locate(descfield.Span(5, 6))[:2])
+        self.assertEqual((4, 2), _placed(cmap, descfield.Span(5, 6))[:2])
 
 
 class AnnotateSpanTest(unittest.TestCase):

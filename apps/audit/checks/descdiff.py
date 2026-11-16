@@ -21,7 +21,7 @@ import re
 
 from COPA.apps.audit import claims as C
 from COPA.apps.audit import modelspec as S
-from COPA.apps.audit.model import (KIND_ACCESSORY, KIND_CABLE, KIND_NAMES,
+from COPA.apps.audit.model import (KIND_CABLE, KIND_NAMES,
                                    KIND_UNKNOWN, LEVEL_RED, LEVEL_YELLOW)
 from COPA.apps.audit.naming import norm, tokenize_models
 

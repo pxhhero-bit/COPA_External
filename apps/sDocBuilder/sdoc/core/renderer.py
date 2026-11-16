@@ -9,7 +9,6 @@ A4、上下1.8/左2.5/右2.0 边距；H1 黑体16 / H2 黑体14 / H3 黑体12 / 
 块内容模型见 library_store.BlockDef.items（text/image/table 三类）。
 """
 import os
-import re
 from datetime import datetime
 
 from docx import Document

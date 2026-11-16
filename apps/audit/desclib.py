@@ -11,7 +11,7 @@
 三者要能对上，所以统一收敛成「碳钢 / 不锈钢」两个语义值。
 """
 import re
-from typing import List, Optional
+from typing import List
 
 RE_CAP = re.compile(r"(?:量程|capacity)[^0-9\n]{0,8}([\d.]+)\s*(kg|t|吨)", re.IGNORECASE)
 RE_FACE = re.compile(
@@ -19,7 +19,11 @@ RE_FACE = re.compile(
     r"[^0-9\n]{0,8}(\d{2,5})\s*[*xX×✕]\s*(\d{2,5})", re.IGNORECASE)
 RE_DIV = re.compile(r"(?:分度值|e\s*=\s*d\s*=|division)[^0-9\n]{0,8}([\d.]+)\s*(kg|g)",
                     re.IGNORECASE)
-RE_NOTE_LINE = re.compile(r"^[ \t]*备注[:：]", re.MULTILINE)
+# 备注行：中文「备注：」与英文「Remarks:」/「Note:」。双语单子的英文段落是
+# 中文的逐句翻译，同一件「备注行不该出现在台秤描述里」的事，两种语言都要认，
+# 否则同一张单的中文版报、英文版不报。
+RE_NOTE_LINE = re.compile(r"^[ \t]*(?:备注|remarks?|notes?)[:：]",
+                          re.MULTILINE | re.IGNORECASE)
 RE_MTL = re.compile(r"(?:材质|material)[:：]\s*([^，,；;\n）)]*)", re.IGNORECASE)
 RE_EX = re.compile(r"防爆|Ex\s|explosion\s*proof|[（(]\s*E\s*[）)]", re.IGNORECASE)
 

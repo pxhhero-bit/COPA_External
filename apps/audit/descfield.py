@@ -112,8 +112,10 @@ class DescDoc:
     """一段描述的字段树。fields 由 claims 填入（语义层），这里只管结构."""
     text: str = ""
     clauses: List[Clause] = field(default_factory=list)
-    # 语义字段：key -> (规整值, 原文, Span)；claims 负责填，这里留空也能用
-    fields: Dict[str, Tuple[str, str, Span]] = field(default_factory=dict)
+    # 语义字段：key -> (规整值, 原文, Span)；claims 负责填，这里留空也能用。
+    # 第三项可能是 None：「知值不知位」的字段（如按整行推出来的）没有字符区间，
+    # 调用方标红前必须先判空。
+    fields: Dict[str, Tuple[str, str, Optional[Span]]] = field(default_factory=dict)
 
     # ---- 结构查询 ---------------------------------------------------------
     def named(self, name: str) -> List[Clause]:
