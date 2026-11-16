@@ -4,8 +4,9 @@
 APP_VERSION = "v1.42"
 APP_RELEASE_DATE = "2026-11-16"
 
-# 渠道标记：Beta 版在「关于」、反馈数据包与快照里都会带上，出正式版时置空。
-APP_CHANNEL = ""
+# 渠道标记：对外发布版统一走 External，出现在「关于」、反馈数据包、
+# 项目快照与打包产物文件名（COPA_v1.42_External.zip）里。
+APP_CHANNEL = "External"
 
 
 def version_text() -> str:
