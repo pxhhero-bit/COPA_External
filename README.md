@@ -4,7 +4,7 @@
 
 > Turning business experience into executable system capabilities.
 
-### 1. Overview
+#### 1.1 Overview
 
 COPA is a vertical-domain AI agent designed for industrial weighing equipment selection and quotation.
 
@@ -14,7 +14,44 @@ Rather than relying on an LLM to make technical decisions, COPA combines natural
 
 The system connects the process from customer requirement intake to equipment selection, quotation generation, quotation review, and technical document preparation.
 
+COPA did not start as an attempt to build an AI Agent. It evolved from an Excel-based selection tool, driven by practical requirements in industrial weighing equipment sales and configuration.
+
+As the workflow expanded, the project gradually introduced an independent business engine, structured external data, desktop application interfaces, and eventually an LLM-based requirement understanding layer.
+
+This evolution reflects a practical approach to AI-assisted software development: start with a real business problem, establish reliable execution capabilities, and introduce AI where it provides meaningful value.
+
 **Core principle: AI interprets requirements, rules execute calculations, and humans retain decision-making authority.**
+
+#### 1.2 What COPA Tries to Demonstrate
+
+COPA is more than an AI-powered application for industrial weighing equipment. It is also a practical exploration of how AI capabilities can be integrated into existing business workflows without sacrificing reliability, maintainability, or human control.
+
+This project explores several ideas:
+
+**1. Domain expertise can become executable system capabilities.**
+Business knowledge does not have to remain scattered across documents, spreadsheets, and individual experience. With structured data, explicit rules, and well-defined interfaces, domain-specific knowledge can be organized into maintainable software components.
+
+**2. An effective Agent should build on existing capabilities, not reinvent them.**
+LLMs are useful for understanding natural language, and providing effective fundermental Human interactions. But deterministic calculations, rule enforcement, and other well-defined operations are often better handled by conventional software. The key is to assign each capability to the right component, instead of asking the agent to plan and execute something with know-how unspoken in human's head. So an Agent should recognize and reuse reliable capabilities that have already been established through software, tools, structured data, and documented workflows, rather than repeatedly reconstructing them from scratch or relying on tacit knowledge that has never been explicitly defined.
+
+**3. Human oversight can be part of the architecture.**
+Human review is not merely an exception-handling mechanism for when automation fails or reaches its limits. It can be an explicit stage in the workflow, where model-generated interpretations are are reviewed, corrected, and confirmed before proceeding.
+
+**4. Existing business software can also evolve into AI-assisted systems.**
+
+Instead of rebuilding an entire application from scratch as an AI-native system, COPA explores how an Agent layer can complement an existing software system, reuse its established business logic, and introduce new interaction methods without duplicating core capabilities.
+
+COPA is a practical implementation of these ideas in a specialized industrial domain—not a universal Agent framework or a claim that every business process should be automated by AI.
+
+Its broader question is:
+**How can we combine AI capabilities with human intent to create reliable, executable, and auditable business operations—even under limited resources?**
+
+#### 1.3 What COPA Does Not Try to be
+
+- It is not a general-purpose Agent framework.
+- It does not delegate deterministic business calculations to an LLM.
+- It does not aim to eliminate professional review.
+- It does not attempt to automate every step of a business workflow.
 
 ### 2. End-to-End Business Workflow
 
@@ -50,6 +87,12 @@ flowchart TD
 
     N --> O["Technical Proposal Generation"]
 ```
+
+**Architectural Trade-offs**
+
+COPA deliberately avoids making agent the central controller of every business operation. The Agent Runtime is bounded to requirement understanding and structured handoff, while the conventional application retains control over business execution.
+
+It reduces unnecessary model dependency, keeps deterministic operations independently testable, and allows the AI interaction layer to evolve without requiring the core business engine to be redesigned.
 
 #### 2.1 Requirement Intake
 
@@ -252,7 +295,25 @@ Its context management includes:
 
 Multiple LLM providers and models can be configured and switched through the provider layer.
 
-### 5. Project Records and Business Traceability
+### 5. Screen Demo
+#### 5.1 Conversational Selection
+Describe your requirements in natural language and let COPA extract the key information through multi-turn interaction.
+
+![Conversational Selection](./assets/demo/LLM_demo.gif)
+
+#### 5.2 Traditional Selection
+Configure weighing equipment through the conventional structured/terms input interface.
+
+![Traditional Selection](./assets/demo/desk_table.png)
+![Traditional Selection](./assets/demo/desk_demo.gif)
+
+#### 5.3 Technical Proposal
+Organize and output the structured technical proposal from zero or existing snapshots.
+
+![Technical Proposal Arranging](./assets/demo/S_doc_demo.gif)
+![Technical Proposal Preview](./assets/demo/sdoc_demo2.gif)
+
+### 6. Project Records and Business Traceability
 
 COPA maintains project records throughout the business process.
 
@@ -276,7 +337,7 @@ The review module focuses on mechanical consistency and completeness. It does **
 
 COPA distinguishes between quotations generated by the system and externally prepared quotations. This allows the review process to account for manual modifications and different quotation origins.
 
-### 6. Project Structure
+### 7. Project Structure
 
 The project separates application code from external business assets.
 
@@ -323,7 +384,7 @@ Business assets are maintained separately from the core application code. Produc
 
 The deterministic engine is designed to remain independent of the GUI framework and presentation layer, making its business logic easier to maintain and extend.
 
-### 7. Technology Stack
+### 8. Technology Stack
 
 | Component                    | Technology             |
 | ---------------------------- | ---------------------- |
@@ -339,9 +400,9 @@ The core business engine is implemented as a standalone calculation and rule-pro
 
 The application is packaged for Windows desktop deployment. External business assets are maintained alongside the packaged application, allowing supported data and configuration updates without rebuilding the executable.
 
-### 8. Current Version and Scope
+### 9. Current Version and Scope
 
-**Current Version: v1.42 External**
+**Current Version: v1.42 Stable**
 
 #### Implemented Product Categories
 
@@ -372,7 +433,7 @@ Automotive scales are included in the broader product roadmap, but their selecti
 - Product selection and calculation are performed by the deterministic business engine, not by the LLM.
 - Supported product categories and functions are determined by the current release and its external business assets.
 
-### 9. Design Philosophy
+### 10. Design Philosophy
 
 COPA is built around a simple distinction:
 
@@ -384,10 +445,8 @@ By combining bounded AI-assisted understanding, deterministic business execution
 
 ---
 
-**COPA v1.42 External**
+**COPA v1.42 Stable**
 Industrial Weighing Equipment Selection & Quotation Agent
-
-
 
 ---
 
@@ -417,7 +476,30 @@ COPA 最初从 Excel 选型辅助工具发展而来，随后逐步演进为具�
 
 产品数据覆盖 FT、AW、FAB 等品牌。汽车衡及数字式汽车衡目前保留品类规划，选型流程尚未实现。
 
-#### 核心能力
+#### 1.1 COPA 希望验证什么？
+
+COPA 不仅是一款面向工业称重领域的选型与报价软件，也是一项关于 Agent 如何融入真实业务流程的实践探索。
+
+它希望通过一个具体的业务场景，验证几个设计思路：
+
+**1. 业务经验可以转化为可执行的软件能力。**
+业务知识不应只能依赖个人经验、零散文档或手工表格来传递。通过结构化数据、明确的业务规则与清晰的程序接口，可以将领域知识组织为可维护、可复核的软件能力。
+
+**2. Agent 不必接管所有工作。**
+LLM 适合处理自然语言、模糊表达与需求澄清；确定性程序则更适合承担规则明确的计算、匹配与校验工作。关键不是让模型参与尽可能多的环节，而是明确不同能力的职责边界。
+
+**3. 人工确认可以成为系统架构的一部分。**
+人工审核并不是自动化失败后的补救措施，而是可以被明确设计进业务流程的正式节点。模型生成的理解结果经过审核、修正与确认后，才进入后续业务执行。
+
+**4. 传统业务软件可以逐步演进为 AI 协作系统。**
+不必为了引入 AI 而重建整个应用。Agent 可以作为新的能力层，与既有软件、业务引擎及数据资产协作，在复用成熟业务能力的同时，提供新的交互方式。
+
+COPA 是这些思路在工业称重这一垂直领域中的具体实践，而不是一个通用 Agent 框架，也不试图证明所有业务流程都应该由 AI 自动化。
+
+它真正想探索的问题是：
+**如何将 AI 有效转化为可靠、可执行、可验证（且低成本）的业务操作？**
+
+#### 1.2 核心能力
 
 | 功能模块 | 主要能力                                       |
 | -------- | ---------------------------------------------- |
@@ -699,7 +781,27 @@ COPA 的 LLM Loop 与常见的自主工具调用型 Agent 有所不同。
 
 ---
 
-### 5. 项目记录与业务追溯
+### 5. 截屏展示
+#### 5.1 对话选型
+用自然语言描述需求，COPA 将自动通过多轮交互提取关键信息。
+
+![对话选型](./assets/demo/LLM_demo.gif)
+
+#### 5.2 传统选型
+通过常规的下拉菜单/术语输入界面配置称重设备。
+
+![下拉菜单选型](./assets/demo/desk_table.png)
+![术语输入选型](./assets/demo/desk_demo.gif)
+
+#### 5.3 技术方案编排
+从零开始或基于现有快照编排并输出技术方案。
+
+![技术方案编排](./assets/demo/S_doc_demo.gif)
+![预览及输出](./assets/demo/sdoc_demo2.gif)
+
+---
+
+### 6. 项目记录与业务追溯
 
 COPA 使用三阶段项目快照记录完整业务过程：
 
@@ -724,7 +826,7 @@ COPA 使用三阶段项目快照记录完整业务过程：
 
 ---
 
-### 6. 程序模块与目录组织
+### 7. 程序模块与目录组织
 
 COPA 将核心程序、业务规则、产品数据、模板、技术语料及运行记录分别组织，避免所有业务知识都固化在程序代码中。
 
@@ -781,7 +883,7 @@ COPA/
 
 ---
 
-### 7. 技术栈
+### 8. 技术栈
 
 | 类别           | 技术               |
 | -------------- | ------------------ |
@@ -796,9 +898,9 @@ COPA/
 
 ---
 
-### 8. 当前版本与功能边界
+### 9. 当前版本与功能边界
 
-**v1.42 — External Release**
+**v1.42 — Stable Release**
 
 当前版本已完成从传统选型辅助工具到垂直领域 Agent 的主要演进，并投入实际业务使用。
 
@@ -823,7 +925,7 @@ COPA/
 
 ---
 
-### 9. 设计理念总结
+### 10. 设计理念总结
 
 COPA 的设计并不是为了证明 AI 可以替代传统软件，也不是为了让每个业务步骤都必须经过 LLM。
 
@@ -848,7 +950,7 @@ COPA 给出的实践答案是：
 | -------- | ------------------------ |
 | 项目名称 | COPA                     |
 | 当前版本 | v1.42                    |
-| 发布状态 | External Release          |
+| 发布状态 | Stable Release           |
 | 主要平台 | Windows Desktop          |
 | 核心语言 | Python                   |
 | 产品领域 | Industrial Weighing      |
